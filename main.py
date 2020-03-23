@@ -38,10 +38,26 @@ class MyMnist(torch.utils.data.Dataset):
         self.targets = np.empty((0), dtype=targets.dtype)
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
-        desired_labels = range(10)
+        self.get_unbalanced_data(data_dict, targets.dtype)
+
+
+    def get_unbalanced_data(self, data_dict, dtype):
+        data_size = {0:data_dict[0].shape[0]}
+        for label in range(1,10):
+            data_size[label] = int(data_size[label-1] / 2)
+        print(data_size)
+        
+        for label in range(10):
+            new_targets = np.full((data_size[label]), label, dtype=dtype)
+            new_data = data_dict[label][:data_size[label]]
+            
+            self.targets = np.append(self.targets, new_targets)
+            self.data = np.append(self.data, new_data, axis=0)
+
+    def get_longlife_data(self, data_dict, desired_labels, dtype):
         for i in range(len(desired_labels)):
             label = desired_labels[i]
-            new_targets = np.full((len(data_dict[label])), label, dtype=targets.dtype)
+            new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
             new_data = data_dict[label]
 
             # add samples from previous classes
@@ -51,7 +67,7 @@ class MyMnist(torch.utils.data.Dataset):
                     prev_label = desired_labels[j]
                     prev_size = min(int(total_prev_size / i), len(data_dict[prev_label]))
 
-                    prev_targets = np.full((prev_size), prev_label, dtype=targets.dtype)
+                    prev_targets = np.full((prev_size), prev_label, dtype=dtype)
                     prev_data = data_dict[prev_label][:prev_size]
 
                     new_targets = np.append(new_targets, prev_targets)
@@ -63,8 +79,6 @@ class MyMnist(torch.utils.data.Dataset):
 
             self.targets = np.append(self.targets, new_targets)
             self.data = np.append(self.data, new_data, axis=0)
-            
-
 
         
     def __len__(self):
@@ -83,24 +97,21 @@ class MyMnist(torch.utils.data.Dataset):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
+        self.dropout_p = 0.5
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
-        self.dropout1 = nn.Dropout2d(0.25)
-        self.dropout2 = nn.Dropout2d(0.5)
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
-        x = self.conv1(x)
+        x = F.dropout(self.conv1(x), training=True, p=self.dropout_p)
         x = F.relu(x)
-        x = self.conv2(x)
+        x = F.dropout(self.conv2(x), training=True, p=self.dropout_p)
         x = F.relu(x)
         x = F.max_pool2d(x, 2)
-        x = self.dropout1(x)
         x = torch.flatten(x, 1)
-        x = self.fc1(x)
+        x = F.dropout(self.fc1(x), training=True, p=self.dropout_p)
         x = F.relu(x)
-        x = self.dropout2(x)
         x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
         return output
@@ -131,6 +142,8 @@ def test(args, model, device, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
+    label_correct = {}
+    label_all = {}
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
@@ -139,11 +152,23 @@ def test(args, model, device, test_loader):
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
+            for label in range(10):
+                inds = (target == label)
+                corr = pred[inds,:].eq(target[inds].view_as(pred[inds,:])).sum().item()
+                if label not in label_correct:
+                    label_correct[label] = 0
+                    label_all[label] = 0
+                label_correct[label] += corr
+                label_all[label] += inds.sum().item()
+
     test_loss /= len(test_loader.dataset)
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
+    for label in range(10):
+        print('{:4d}: {:4.2f}'.format(label, label_correct[label]/label_all[label]), end=' ')
+    print()
 
 
 def main():
@@ -155,7 +180,7 @@ def main():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=14, metavar='N',
                         help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
     parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
                         help='Learning rate step gamma (default: 0.7)')
@@ -178,7 +203,7 @@ def main():
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
         MyMnist(train=True),
-        batch_size=args.batch_size, shuffle=False, **kwargs)
+        batch_size=args.batch_size, shuffle=True, **kwargs)
 
     test_loader = torch.utils.data.DataLoader(
         MyMnist(train=False),
