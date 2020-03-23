@@ -40,11 +40,14 @@ class MyMnist(torch.utils.data.Dataset):
         
         self.get_unbalanced_data(data_dict, targets.dtype)
 
+        self.targets = targets
+        self.data = data
+
 
     def get_unbalanced_data(self, data_dict, dtype):
         data_size = {0:data_dict[0].shape[0]}
         for label in range(1,10):
-            data_size[label] = int(data_size[label-1] / 2)
+            data_size[label] = int(data_size[label-1] / 1.5)
         print(data_size)
         
         for label in range(10):
@@ -118,6 +121,7 @@ class Net(nn.Module):
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
+    T = 10
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         # for param_group in optimizer.param_groups:
@@ -128,14 +132,19 @@ def train(args, model, device, train_loader, optimizer, epoch):
         
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
+
+        output_list = []
+        for i in range(T):
+            output_list.append(torch.unsqueeze(model(data), 0))
+        output_mean = torch.cat(output_list, 0).mean(0)
+        output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+        loss = F.nll_loss(output_mean, target)
         loss.backward()
         optimizer.step()
-        # if batch_idx % args.log_interval == 0:
-        #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-        #         epoch, batch_idx * len(data), len(train_loader.dataset),
-        #         100. * batch_idx / len(train_loader), loss.item()))
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Var: {:.2f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.item(), output_variance))
 
 
 def test(args, model, device, test_loader):
@@ -163,12 +172,12 @@ def test(args, model, device, test_loader):
 
     test_loss /= len(test_loader.dataset)
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
     for label in range(10):
         print('{:4d}: {:4.2f}'.format(label, label_correct[label]/label_all[label]), end=' ')
-    print()
+    print('\n')
 
 
 def main():
@@ -188,7 +197,7 @@ def main():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
 
     parser.add_argument('--save-model', action='store_true', default=False,
