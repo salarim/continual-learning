@@ -39,15 +39,14 @@ class MyMnist(torch.utils.data.Dataset):
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
         self.get_unbalanced_data(data_dict, targets.dtype)
-
-        self.targets = targets
-        self.data = data
+        # self.data = data
+        # self.targets = targets
 
 
     def get_unbalanced_data(self, data_dict, dtype):
         data_size = {0:data_dict[0].shape[0]}
         for label in range(1,10):
-            data_size[label] = int(data_size[label-1] / 1.5)
+            data_size[label] = int(data_size[label-1] / 2)
         print(data_size)
         
         for label in range(10):
@@ -137,12 +136,13 @@ def train(args, model, device, train_loader, optimizer, epoch):
         for i in range(T):
             output_list.append(torch.unsqueeze(model(data), 0))
         output_mean = torch.cat(output_list, 0).mean(0)
-        output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+        softmax_output_list = [F.softmax(o, dim=1) for o in output_list]
+        output_variance = torch.cat(softmax_output_list, 0).var(dim=0).mean().item()
         loss = F.nll_loss(output_mean, target)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Var: {:.2f}'.format(
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Var: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item(), output_variance))
 
