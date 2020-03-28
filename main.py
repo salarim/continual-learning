@@ -39,10 +39,28 @@ class MyMnist(torch.utils.data.Dataset):
         self.targets = np.empty((0), dtype=targets.dtype)
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
-        self.get_longlife_data(data_dict, range(10), targets.dtype, add_pre_samples=False)
+        # self.get_longlife_data(data_dict, range(5), range(5,10), targets.dtype, add_pre_samples=False)
+        self.get_seprated_data(data_dict, range(5), range(10), targets.dtype)
         # self.data = data
         # self.targets = targets
 
+
+    def get_seprated_data(self, data_dict, train_labels, test_labels, dtype):
+        if self.train:
+            for label in train_labels:
+                new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
+                new_data = data_dict[label]
+                self.targets = np.append(self.targets, new_targets)
+                self.data = np.append(self.data, new_data, axis=0)
+            perm = np.random.permutation(len(self.targets))
+            self.targets = self.targets[perm]
+            self.data = self.data[perm]
+        else:
+            for label in test_labels:
+                new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
+                new_data = data_dict[label]
+                self.targets = np.append(self.targets, new_targets)
+                self.data = np.append(self.data, new_data, axis=0)
 
     def get_unbalanced_data(self, data_dict, dtype):
         data_size = {0:data_dict[0].shape[0]}
@@ -57,9 +75,20 @@ class MyMnist(torch.utils.data.Dataset):
             self.targets = np.append(self.targets, new_targets)
             self.data = np.append(self.data, new_data, axis=0)
 
-    def get_longlife_data(self, data_dict, desired_labels, dtype, add_pre_samples=True):
-        for i in range(len(desired_labels)):
-            label = desired_labels[i]
+    def get_longlife_data(self, data_dict, base_labels, tasks_labels, dtype, add_pre_samples=True):
+        # Add base labels
+        for label in base_labels:
+            new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
+            new_data = data_dict[label]
+            self.targets = np.append(self.targets, new_targets)
+            self.data = np.append(self.data, new_data, axis=0)
+        perm = np.random.permutation(len(self.targets))
+        self.targets = self.targets[perm]
+        self.data = self.data[perm]
+
+        # Add tasks labels
+        for i in range(len(tasks_labels)):
+            label = tasks_labels[i]
             new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
             new_data = data_dict[label]
 
@@ -67,7 +96,7 @@ class MyMnist(torch.utils.data.Dataset):
             if self.train and add_pre_samples:
                 total_prev_size = 100
                 for j in range(i):
-                    prev_label = desired_labels[j]
+                    prev_label = tasks_labels[j]
                     prev_size = min(int(total_prev_size / i), len(data_dict[prev_label]))
 
                     prev_targets = np.full((prev_size), prev_label, dtype=dtype)
@@ -152,21 +181,28 @@ def train(args, model, device, train_loader, test_loader, optimizer, epoch):
                 100. * batch_idx / len(train_loader), loss.item(), correct / target.shape[0],
                 output_variance))
 
-            test(args, model, device, test_loader)
+            # test(args, model, device, test_loader)
 
 
 def test(args, model, device, test_loader):
     model.eval()
+    T = 50
     test_loss = 0
     correct = 0
     label_correct = {}
     label_all = {}
+    output_variances = {i:[] for i in range(10)}
+
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            output_list = []
+            for i in range(T):
+                output_list.append(torch.unsqueeze(model(data), 0))
+            output_mean = torch.cat(output_list, 0).mean(0)
+            output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+            test_loss += F.nll_loss(output_mean, target, reduction='sum').item()  # sum up batch loss
+            pred = output_mean.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
             for label in range(10):
@@ -178,14 +214,21 @@ def test(args, model, device, test_loader):
                 label_correct[label] += corr
                 label_all[label] += inds.sum().item()
 
+            for label in target.unique().tolist():
+                output_variances[label].append(output_variance)
+            print('Test labels:', target.unique().tolist(),
+            'Var:', output_variance)
+
     test_loss /= len(test_loader.dataset)
 
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
     for label in range(10):
-        print('{:4d}: {:4.2f}'.format(label, label_correct[label]/label_all[label]), end=' ')
+        print('{:4d}: {:4.0f}%'.format(label, 100. * label_correct[label]/label_all[label]), end=' ')
     print('\n')
+    for label in range(10):
+        print(label, np.mean(output_variances[label]))
 
 
 def main():
@@ -193,7 +236,7 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+    parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=1, metavar='N',
                         help='number of epochs to train (default: 14)')
