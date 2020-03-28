@@ -8,6 +8,7 @@ from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from PIL import Image
 import numpy as np
+from termcolor import cprint
 
 class MyMnist(torch.utils.data.Dataset):
     """Face Landmarks dataset."""
@@ -38,7 +39,7 @@ class MyMnist(torch.utils.data.Dataset):
         self.targets = np.empty((0), dtype=targets.dtype)
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
-        self.get_unbalanced_data(data_dict, targets.dtype)
+        self.get_longlife_data(data_dict, range(10), targets.dtype, add_pre_samples=False)
         # self.data = data
         # self.targets = targets
 
@@ -56,14 +57,14 @@ class MyMnist(torch.utils.data.Dataset):
             self.targets = np.append(self.targets, new_targets)
             self.data = np.append(self.data, new_data, axis=0)
 
-    def get_longlife_data(self, data_dict, desired_labels, dtype):
+    def get_longlife_data(self, data_dict, desired_labels, dtype, add_pre_samples=True):
         for i in range(len(desired_labels)):
             label = desired_labels[i]
             new_targets = np.full((len(data_dict[label])), label, dtype=dtype)
             new_data = data_dict[label]
 
             # add samples from previous classes
-            if self.train:
+            if self.train and add_pre_samples:
                 total_prev_size = 100
                 for j in range(i):
                     prev_label = desired_labels[j]
@@ -119,16 +120,10 @@ class Net(nn.Module):
         return output
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
-    T = 10
+def train(args, model, device, train_loader, test_loader, optimizer, epoch):
+    T = 50
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
-        # for param_group in optimizer.param_groups:
-        #     if target.unique().shape[0] == 1:
-        #         param_group['lr'] = args.lr / 10
-        #     else:
-        #         param_group['lr'] = args.lr
-        
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
 
@@ -136,15 +131,28 @@ def train(args, model, device, train_loader, optimizer, epoch):
         for i in range(T):
             output_list.append(torch.unsqueeze(model(data), 0))
         output_mean = torch.cat(output_list, 0).mean(0)
-        softmax_output_list = [F.softmax(o, dim=1) for o in output_list]
-        output_variance = torch.cat(softmax_output_list, 0).var(dim=0).mean().item()
+        output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
         loss = F.nll_loss(output_mean, target)
         loss.backward()
+        # Change lr
+        new_lr = args.lr / max(output_variance, 1.0)
+        # for param_group in optimizer.param_groups:
+        #         param_group['lr'] = new_lr
+        print('New Learning Rate: {:.5f}'.format(new_lr))
+        #
         optimizer.step()
+
+        pred = output_mean.argmax(dim=1, keepdim=True)
+        correct = pred.eq(target.view_as(pred)).sum().item()
+
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Var: {:.6f}'.format(
+            print('Batch labels: ' + str(torch.unique(target).tolist()))
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Var: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item(), output_variance))
+                100. * batch_idx / len(train_loader), loss.item(), correct / target.shape[0],
+                output_variance))
+
+            test(args, model, device, test_loader)
 
 
 def test(args, model, device, test_loader):
@@ -172,7 +180,7 @@ def test(args, model, device, test_loader):
 
     test_loss /= len(test_loader.dataset)
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
     for label in range(10):
@@ -187,7 +195,7 @@ def main():
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=14, metavar='N',
+    parser.add_argument('--epochs', type=int, default=1, metavar='N',
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
@@ -197,7 +205,7 @@ def main():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+    parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                         help='how many batches to wait before logging training status')
 
     parser.add_argument('--save-model', action='store_true', default=False,
@@ -212,7 +220,7 @@ def main():
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
         MyMnist(train=True),
-        batch_size=args.batch_size, shuffle=True, **kwargs)
+        batch_size=args.batch_size, shuffle=False, **kwargs)
 
     test_loader = torch.utils.data.DataLoader(
         MyMnist(train=False),
@@ -223,7 +231,7 @@ def main():
 
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
+        train(args, model, device, train_loader, test_loader, optimizer, epoch)
         test(args, model, device, test_loader)
         # scheduler.step()
 
