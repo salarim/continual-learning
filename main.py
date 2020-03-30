@@ -39,8 +39,8 @@ class MyMnist(torch.utils.data.Dataset):
         self.targets = np.empty((0), dtype=targets.dtype)
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
-        # self.get_longlife_data(data_dict, range(5), range(5,10), targets.dtype, add_pre_samples=False)
-        self.get_seprated_data(data_dict, range(5), range(10), targets.dtype)
+        self.get_longlife_data(data_dict, range(5), range(5,10), targets.dtype)
+        # self.get_seprated_data(data_dict, [0,1,2,3,4], range(10), targets.dtype)
         # self.data = data
         # self.targets = targets
 
@@ -150,7 +150,7 @@ class Net(nn.Module):
 
 
 def train(args, model, device, train_loader, test_loader, optimizer, epoch):
-    T = 50
+    T = 10
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
@@ -161,10 +161,12 @@ def train(args, model, device, train_loader, test_loader, optimizer, epoch):
             output_list.append(torch.unsqueeze(model(data), 0))
         output_mean = torch.cat(output_list, 0).mean(0)
         output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+        output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
         loss = F.nll_loss(output_mean, target)
         loss.backward()
         # Change lr
-        new_lr = args.lr / max(output_variance, 1.0)
+        scaled_entropy = output_entropy * 100.
+        new_lr = args.lr / max(scaled_entropy, 1.0)
         # for param_group in optimizer.param_groups:
         #         param_group['lr'] = new_lr
         print('New Learning Rate: {:.5f}'.format(new_lr))
@@ -176,22 +178,23 @@ def train(args, model, device, train_loader, test_loader, optimizer, epoch):
 
         if batch_idx % args.log_interval == 0:
             print('Batch labels: ' + str(torch.unique(target).tolist()))
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Var: {:.6f}'.format(
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item(), correct / target.shape[0],
-                output_variance))
+                output_entropy))
 
-            # test(args, model, device, test_loader)
+            test(args, model, device, test_loader, print_entropy=False)
 
 
-def test(args, model, device, test_loader):
+def test(args, model, device, test_loader, print_entropy=True):
     model.eval()
-    T = 50
+    T = 1
     test_loss = 0
     correct = 0
     label_correct = {}
     label_all = {}
     output_variances = {i:[] for i in range(10)}
+    output_entropies = {i:[] for i in range(10)}
 
     with torch.no_grad():
         for data, target in test_loader:
@@ -201,6 +204,7 @@ def test(args, model, device, test_loader):
                 output_list.append(torch.unsqueeze(model(data), 0))
             output_mean = torch.cat(output_list, 0).mean(0)
             output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+            output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
             test_loss += F.nll_loss(output_mean, target, reduction='sum').item()  # sum up batch loss
             pred = output_mean.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -216,8 +220,9 @@ def test(args, model, device, test_loader):
 
             for label in target.unique().tolist():
                 output_variances[label].append(output_variance)
-            print('Test labels:', target.unique().tolist(),
-            'Var:', output_variance)
+                output_entropies[label].append(output_entropy)
+            # print('Test labels:', target.unique().tolist(),
+            # 'Var:', output_variance, 'Entropy:', output_entropy)
 
     test_loss /= len(test_loader.dataset)
 
@@ -227,8 +232,9 @@ def test(args, model, device, test_loader):
     for label in range(10):
         print('{:4d}: {:4.0f}%'.format(label, 100. * label_correct[label]/label_all[label]), end=' ')
     print('\n')
-    for label in range(10):
-        print(label, np.mean(output_variances[label]))
+    if print_entropy:
+        for label in range(10):
+            print(label, np.mean(output_variances[label]), np.mean(output_entropies[label]))
 
 
 def main():
