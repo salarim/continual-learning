@@ -38,9 +38,14 @@ class DataloaderCreator:
         data_list, target_list = self.get_longlife_data(mnist_dict, 
                             [[0,1,2,3], [4,5], [6,7], [8,9]],
                             exemplar_size)
+
         self.data_loaders = []
+        transform=transforms.Compose([
+                           transforms.ToTensor(),
+                           transforms.Normalize((0.1307,), (0.3081,))
+                       ])
         for i in range(len(target_list)):
-            dataset = SimpleDataset(data_list[i], target_list[i])
+            dataset = SimpleDataset(data_list[i], target_list[i], transform=transform)
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
             self.data_loaders.append(data_loader)
@@ -74,7 +79,7 @@ class DataloaderCreator:
         data_list = []
         target_list = []
 
-        tmp_data, tmp_target = next(iter(data_dict.items()))
+        tmp_target, tmp_data = next(iter(data_dict.items()))
         data_dtype, target_dtype = tmp_data.dtype, tmp_target.dtype
         empty_data_shape = (0, tmp_data.shape[1], tmp_data.shape[2])
 
@@ -83,7 +88,7 @@ class DataloaderCreator:
             data = np.empty(empty_data_shape, dtype=data_dtype)
 
             for target in task_targets:
-                new_targets = np.full((len(data_dict[label])), target, dtype=target_dtype)
+                new_targets = np.full((len(data_dict[target])), target, dtype=target_dtype)
                 new_data = data_dict[target]
                 targets = np.append(targets, new_targets)
                 data = np.append(data, new_data, axis=0)
@@ -136,15 +141,11 @@ class Net(nn.Module):
         return output
 
 
-def train(args, model, device, train_loaders, test_loader, optimizer, epoch):
-    train_loaders_size = 0
-    for train_loader in train_loaders:
-        train_loaders_size += len(train_loader.dataset)
-    
+def train(args, model, device, train_loaders, test_loader, optimizer, epoch):   
     T = 10
     model.train()
     max_target = -1
-    for train_loader in train_loaders:
+    for task_idx, train_loader in enumerate(train_loaders):
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
             optimizer.zero_grad()
@@ -180,9 +181,9 @@ def train(args, model, device, train_loaders, test_loader, optimizer, epoch):
 
             if batch_idx % args.log_interval == 0:
                 print('Batch labels: ' + str(torch.unique(target).tolist()))
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
-                    epoch, batch_idx * len(data), train_loaders_size,
-                    100. * batch_idx / train_loaders_size, loss.item(), correct / target.shape[0],
+                print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
+                    task_idx, epoch, batch_idx * len(data), len(train_loader.dataset),
+                    100. * (batch_idx * len(data)) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
                     output_entropy))
 
                 # test(args, model, device, test_loader, print_entropy=False)
@@ -275,10 +276,10 @@ def main():
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loaders = DataloaderCreator(train=True, batch_size=args.batch_size,
-        shuffle=False, **kwargs)
+        shuffle=False, **kwargs).data_loaders
 
     test_loaders = DataloaderCreator(train=False, batch_size=args.test_batch_size,
-        shuffle=False, **kwargs)
+        shuffle=False, **kwargs).data_loaders
 
     model = Net().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
