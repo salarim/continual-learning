@@ -39,7 +39,7 @@ class MyMnist(torch.utils.data.Dataset):
         self.targets = np.empty((0), dtype=targets.dtype)
         self.data = np.empty((0, data.shape[1], data.shape[2]), dtype=data.dtype)
         
-        self.get_longlife_data(data_dict, range(5), range(5,10), targets.dtype)
+        self.get_longlife_data(data_dict, [], range(10), targets.dtype)
         # self.get_seprated_data(data_dict, [0,1,2,3,4], range(10), targets.dtype)
         # self.data = data
         # self.targets = targets
@@ -95,9 +95,9 @@ class MyMnist(torch.utils.data.Dataset):
             # add samples from previous classes
             if self.train and add_pre_samples:
                 total_prev_size = 100
-                for j in range(i):
-                    prev_label = tasks_labels[j]
-                    prev_size = min(int(total_prev_size / i), len(data_dict[prev_label]))
+                prev_labels = list(base_labels) + list(tasks_labels[:i])
+                for prev_label in prev_labels:
+                    prev_size = min(int(total_prev_size / len(prev_labels)), len(data_dict[prev_label]))
 
                     prev_targets = np.full((prev_size), prev_label, dtype=dtype)
                     prev_data = data_dict[prev_label][:prev_size]
@@ -152,6 +152,7 @@ class Net(nn.Module):
 def train(args, model, device, train_loader, test_loader, optimizer, epoch):
     T = 10
     model.train()
+    max_target = -1
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
@@ -166,10 +167,19 @@ def train(args, model, device, train_loader, test_loader, optimizer, epoch):
         loss.backward()
         # Change lr
         scaled_entropy = output_entropy * 100.
-        new_lr = args.lr / max(scaled_entropy, 1.0)
-        # for param_group in optimizer.param_groups:
-        #         param_group['lr'] = new_lr
+        new_lr = args.lr / min(max(scaled_entropy, 1.0), 100.0)
         print('New Learning Rate: {:.5f}'.format(new_lr))
+        for param_group in optimizer.param_groups:
+                param_group['lr'] = new_lr
+        
+        # max_target = max(max_target, max(target).item())
+        # if min(target).item() < max_target:
+        #     new_lr = args.lr
+        # else:
+        #     new_lr = args.lr / 10
+        # print('New Learning Rate: {:.5f}'.format(new_lr))
+        # for param_group in optimizer.param_groups:
+        #     param_group['lr'] = new_lr
         #
         optimizer.step()
 
@@ -183,7 +193,7 @@ def train(args, model, device, train_loader, test_loader, optimizer, epoch):
                 100. * batch_idx / len(train_loader), loss.item(), correct / target.shape[0],
                 output_entropy))
 
-            test(args, model, device, test_loader, print_entropy=False)
+            # test(args, model, device, test_loader, print_entropy=False)
 
 
 def test(args, model, device, test_loader, print_entropy=True):
@@ -240,7 +250,7 @@ def test(args, model, device, test_loader, print_entropy=True):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
                         help='input batch size for testing (default: 1000)')
