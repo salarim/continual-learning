@@ -34,9 +34,10 @@ class DataloaderCreator:
     def __init__(self, train, batch_size, shuffle, **kwargs):
         self.train = train
         mnist_dict = self.get_mnist_dict()
-        exemplar_size = 10 if train else 0
+        exemplar_size = 100 if train else 0
+        self.task_target_set = [[0,1,2,3], [4,5], [6,7], [8,9]]
         data_list, target_list = self.get_longlife_data(mnist_dict, 
-                            [[0,1,2,3], [4,5], [6,7], [8,9]],
+                            self.task_target_set,
                             exemplar_size)
 
         self.data_loaders = []
@@ -141,61 +142,60 @@ class Net(nn.Module):
         return output
 
 
-def train(args, model, device, train_loaders, test_loader, optimizer, epoch):   
+def train(args, model, device, train_loader_creator, test_loader_creator, optimizer):   
     T = 10
     model.train()
-    max_target = -1
-    for task_idx, train_loader in enumerate(train_loaders):
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
+    for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+        for epoch in range(1,args.epochs+1):
+            for batch_idx, (data, target) in enumerate(train_loader):
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
 
-            output_list = []
-            for i in range(T):
-                output_list.append(torch.unsqueeze(model(data), 0))
-            output_mean = torch.cat(output_list, 0).mean(0)
-            output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
-            output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
-            loss = F.nll_loss(output_mean, target)
-            loss.backward()
-            # Change lr
-            scaled_entropy = output_entropy * 100.
-            new_lr = args.lr / min(max(scaled_entropy, 1.0), 100.0)
-            print('New Learning Rate: {:.5f}'.format(new_lr))
-            for param_group in optimizer.param_groups:
-                    param_group['lr'] = new_lr
-            
-            # max_target = max(max_target, max(target).item())
-            # if min(target).item() < max_target:
-            #     new_lr = args.lr
-            # else:
-            #     new_lr = args.lr / 10
-            # print('New Learning Rate: {:.5f}'.format(new_lr))
-            # for param_group in optimizer.param_groups:
-            #     param_group['lr'] = new_lr
-            #
-            optimizer.step()
+                output_list = []
+                for i in range(T):
+                    output_list.append(torch.unsqueeze(model(data), 0))
+                output_mean = torch.cat(output_list, 0).mean(0)
+                output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+                output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
+                loss = F.nll_loss(output_mean, target)
+                loss.backward()
+                # Change lr
+                # scaled_entropy = output_entropy * 100.
+                # new_lr = args.lr / min(max(scaled_entropy, 1.0), 100.0)
+                # print('New Learning Rate: {:.5f}'.format(new_lr))
+                # for param_group in optimizer.param_groups:
+                #         param_group['lr'] = new_lr
+                
+                # if min(target).item() < min(train_loader_creator.task_target_set[task_idx]):
+                #     new_lr = args.lr
+                # else:
+                #     new_lr = args.lr / 10
+                # print('New Learning Rate: {:.5f}'.format(new_lr))
+                # for param_group in optimizer.param_groups:
+                #     param_group['lr'] = new_lr
+                
+                optimizer.step()
 
-            pred = output_mean.argmax(dim=1, keepdim=True)
-            correct = pred.eq(target.view_as(pred)).sum().item()
+                pred = output_mean.argmax(dim=1, keepdim=True)
+                correct = pred.eq(target.view_as(pred)).sum().item()
 
-            if batch_idx % args.log_interval == 0:
-                print('Batch labels: ' + str(torch.unique(target).tolist()))
-                print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
-                    task_idx, epoch, batch_idx * len(data), len(train_loader.dataset),
-                    100. * (batch_idx * len(data)) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
-                    output_entropy))
+                if batch_idx % args.log_interval == 0:
+                    print('Batch labels: ' + str(torch.unique(target).tolist()))
+                    print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
+                        task_idx+1, epoch, batch_idx * len(data), len(train_loader.dataset),
+                        100. * (batch_idx * len(data)) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
+                        output_entropy))
 
-                # test(args, model, device, test_loader, print_entropy=False)
+                    # test(args, model, device, test_loader_creator, print_entropy=False)
 
 
-def test(args, model, device, test_loaders, print_entropy=True):
+def test(args, model, device, test_loader_creator, print_entropy=True):
     test_loaders_size = 0
-    for test_loader in test_loaders:
+    for test_loader in test_loader_creator.data_loaders:
         test_loaders_size += len(test_loader.dataset)
 
     model.eval()
-    T = 1
+    T = 10
     test_loss = 0
     correct = 0
     label_correct = {}
@@ -204,7 +204,7 @@ def test(args, model, device, test_loaders, print_entropy=True):
     output_entropies = {i:[] for i in range(10)}
 
     with torch.no_grad():
-        for test_loader in test_loaders:
+        for test_loader in test_loader_creator.data_loaders:
             for data, target in test_loader:
                 data, target = data.to(device), target.to(device)
                 output_list = []
@@ -248,11 +248,11 @@ def test(args, model, device, test_loaders, print_entropy=True):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=1, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=10, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=1, metavar='N',
+    parser.add_argument('--epochs', type=int, default=5, metavar='N',
                         help='number of epochs to train (default: 14)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 1.0)')
@@ -275,20 +275,19 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    train_loaders = DataloaderCreator(train=True, batch_size=args.batch_size,
-        shuffle=False, **kwargs).data_loaders
+    train_loader_creator = DataloaderCreator(train=True, batch_size=args.batch_size,
+        shuffle=False, **kwargs)
 
-    test_loaders = DataloaderCreator(train=False, batch_size=args.test_batch_size,
-        shuffle=False, **kwargs).data_loaders
+    test_loader_creator = DataloaderCreator(train=False, batch_size=args.test_batch_size,
+        shuffle=False, **kwargs)
 
     model = Net().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loaders, test_loaders, optimizer, epoch)
-        test(args, model, device, test_loaders)
-        # scheduler.step()
+    train(args, model, device, train_loader_creator, test_loader_creator, optimizer)
+    test(args, model, device, test_loader_creator)
+    # scheduler.step()
 
     if args.save_model:
         torch.save(model.state_dict(), "mnist_cnn.pt")
