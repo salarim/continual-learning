@@ -36,7 +36,7 @@ class DataloaderCreator:
         mnist_dict = self.get_mnist_dict()
         exemplar_size = 100 if train else 0
         self.task_target_set = [[0,1,2,3], [4,5], [6,7], [8,9]]
-        data_list, target_list = self.get_longlife_data(mnist_dict, 
+        data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(mnist_dict, 
                             self.task_target_set,
                             exemplar_size)
 
@@ -50,6 +50,42 @@ class DataloaderCreator:
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
             self.data_loaders.append(data_loader)
+
+        self.exemplar_datasets = []
+        for i in range(len(exemplar_target_list)):
+            dataset = SimpleDataset(exemplar_data_list[i], exemplar_target_list[i],
+             transform=transform)
+            self.exemplar_datasets.append(dataset)
+
+        if self.train:
+            exemplar_buckets_list = self.distribute_exemplars([4,2,1], [100, 100, 100])
+
+    
+    def distribute_exemplars(self, bucket_size_list, exemplar_size_list):
+        assert(len(bucket_size_list) == len(exemplar_size_list))
+        assert(len(bucket_size_list) == len(self.exemplar_datasets))
+        buckets_list = []
+
+        for i in range(len(bucket_size_list)):
+            dataset = self.exemplar_datasets[i]
+            tmp_data, tmp_target = dataset[0]
+            data_dtype, target_dtype = tmp_data.dtype, type(tmp_target)
+
+            new_examplars_idx = np.random.randint(len(dataset), size=exemplar_size_list[i])
+            bucket_numbers = np.random.randint(bucket_size_list[i], size=exemplar_size_list[i])
+            exemplars_data = torch.zeros(exemplar_size_list[i], tmp_data.shape[1], tmp_data.shape[2],
+             dtype=data_dtype)
+            exemplars_target = torch.zeros(exemplar_size_list[i], 1, dtype=target_dtype)
+            for j, idx in enumerate(new_examplars_idx):
+                exemplars_data[j,:,:], exemplars_target[j] = dataset[idx]
+
+            buckets = {}
+            for bucket_number in range(bucket_size_list[i]):
+                bucket_idx = bucket_numbers == bucket_number
+                buckets[bucket_number] = exemplars_data[bucket_idx], exemplars_target[bucket_idx]
+            buckets_list.append(buckets)
+        
+        return buckets_list
 
     def get_mnist_dict(self):
         dataset = datasets.MNIST('../data', train=self.train, download=True)
@@ -79,6 +115,8 @@ class DataloaderCreator:
 
         data_list = []
         target_list = []
+        exemplar_data_list = []
+        exemplar_target_list = []
 
         tmp_target, tmp_data = next(iter(data_dict.items()))
         data_dtype, target_dtype = tmp_data.dtype, tmp_target.dtype
@@ -98,15 +136,19 @@ class DataloaderCreator:
             for prev_targets in task_target_set[:i]:
                 prev_targets_set.extend(prev_targets)
 
-            if exemplar_size > 0:
+            if exemplar_size > 0 and len(prev_targets_set) > 0:
+                prev_targets_all = np.empty((0), dtype=target_dtype)
+                prev_data_all = np.empty(empty_data_shape, dtype=data_dtype)
                 for prev_target in prev_targets_set:
                     size = int(exemplar_size/len(prev_targets_set))
                     prev_targets = np.full(size, prev_target, dtype=target_dtype)
                     prev_all_data = data_dict[prev_target]
                     idx = np.random.randint(prev_all_data.shape[0], size=size)
                     prev_data = prev_all_data[idx,:,:]
-                    targets = np.append(targets, prev_targets)
-                    data = np.append(data, prev_data, axis=0)
+                    prev_targets_all = np.append(prev_targets_all, prev_targets)
+                    prev_data_all = np.append(prev_data_all, prev_data, axis=0)
+                exemplar_target_list.append(prev_targets_all)
+                exemplar_data_list.append(prev_data_all)
 
             perm = np.random.permutation(len(targets))
             targets = targets[perm]
@@ -115,7 +157,7 @@ class DataloaderCreator:
             data_list.append(data)
             target_list.append(targets)
         
-        return data_list, target_list
+        return data_list, target_list, exemplar_data_list, exemplar_target_list
 
 
 
@@ -169,7 +211,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 # if min(target).item() < min(train_loader_creator.task_target_set[task_idx]):
                 #     new_lr = args.lr
                 # else:
-                #     new_lr = args.lr / 10
+                #     new_lr = args.lr / 50
                 # print('New Learning Rate: {:.5f}'.format(new_lr))
                 # for param_group in optimizer.param_groups:
                 #     param_group['lr'] = new_lr
@@ -181,10 +223,10 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
 
                 if batch_idx % args.log_interval == 0:
                     print('Batch labels: ' + str(torch.unique(target).tolist()))
-                    print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f}'.format(
+                    print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f} Variance: {:.6f}'.format(
                         task_idx+1, epoch, batch_idx * len(data), len(train_loader.dataset),
                         100. * (batch_idx * len(data)) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
-                        output_entropy))
+                        output_entropy, output_variance))
 
                     # test(args, model, device, test_loader_creator, print_entropy=False)
 
