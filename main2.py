@@ -61,7 +61,8 @@ class DataloaderCreator:
         if self.train:
             bucket_size_list = []
             for data_loader in self.data_loaders[:len(self.data_loaders)-1]:
-                bucket_size_list.append(math.floor(len(data_loader.dataset)/batch_size))
+                bucket_size_list.append(math.ceil(len(data_loader.dataset)/batch_size))
+            print(bucket_size_list)
             exemplar_size_list = [100, 100, 100]
             self.buckets_list = exemplar_buckets_list = self.distribute_exemplars(bucket_size_list,
              exemplar_size_list)
@@ -197,13 +198,15 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     T = 10
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
-        buckets = train_loader_creator.buckets_list[task_idx]
+        if task_idx > 0:
+            buckets = train_loader_creator.buckets_list[task_idx-1]
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
-                exemplar_data, exemplar_target = buckets[batch_idx]
-                if exemplar_data is not None:
-                    data = torch.cat((data, exemplar_data), 0)
-                    target = torch.cat((target, exemplar_target), 0)
+                if task_idx > 0:
+                    exemplar_data, exemplar_target = buckets[batch_idx]
+                    if exemplar_data is not None:
+                        data = torch.cat((data, exemplar_data), 0)
+                        target = torch.cat((target, exemplar_target), 0)
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
 
