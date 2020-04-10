@@ -9,6 +9,7 @@ from torch.optim.lr_scheduler import StepLR
 from PIL import Image
 import numpy as np
 from termcolor import cprint
+import math
 
 class SimpleDataset(torch.utils.data.Dataset):
 
@@ -58,7 +59,12 @@ class DataloaderCreator:
             self.exemplar_datasets.append(dataset)
 
         if self.train:
-            exemplar_buckets_list = self.distribute_exemplars([4,2,1], [100, 100, 100])
+            bucket_size_list = []
+            for data_loader in self.data_loaders[:len(self.data_loaders)-1]:
+                bucket_size_list.append(math.floor(len(data_loader.dataset)/batch_size))
+            exemplar_size_list = [100, 100, 100]
+            self.buckets_list = exemplar_buckets_list = self.distribute_exemplars(bucket_size_list,
+             exemplar_size_list)
 
     
     def distribute_exemplars(self, bucket_size_list, exemplar_size_list):
@@ -73,16 +79,19 @@ class DataloaderCreator:
 
             new_examplars_idx = np.random.randint(len(dataset), size=exemplar_size_list[i])
             bucket_numbers = np.random.randint(bucket_size_list[i], size=exemplar_size_list[i])
-            exemplars_data = torch.zeros(exemplar_size_list[i], tmp_data.shape[1], tmp_data.shape[2],
+            exemplars_data = torch.zeros(exemplar_size_list[i], 1, tmp_data.shape[1], tmp_data.shape[2],
              dtype=data_dtype)
-            exemplars_target = torch.zeros(exemplar_size_list[i], 1, dtype=target_dtype)
+            exemplars_target = torch.zeros(exemplar_size_list[i], dtype=target_dtype)
             for j, idx in enumerate(new_examplars_idx):
-                exemplars_data[j,:,:], exemplars_target[j] = dataset[idx]
+                exemplars_data[j] = dataset[idx][0]
+                exemplars_target[j] = dataset[idx][1]
 
             buckets = {}
             for bucket_number in range(bucket_size_list[i]):
+                buckets[bucket_number] = (None,None)
                 bucket_idx = bucket_numbers == bucket_number
-                buckets[bucket_number] = exemplars_data[bucket_idx], exemplars_target[bucket_idx]
+                if np.any(bucket_idx):
+                    buckets[bucket_number] = exemplars_data[bucket_idx], exemplars_target[bucket_idx]
             buckets_list.append(buckets)
         
         return buckets_list
@@ -188,8 +197,13 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     T = 10
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+        buckets = train_loader_creator.buckets_list[task_idx]
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
+                exemplar_data, exemplar_target = buckets[batch_idx]
+                if exemplar_data is not None:
+                    data = torch.cat((data, exemplar_data), 0)
+                    target = torch.cat((target, exemplar_target), 0)
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
 
@@ -337,3 +351,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
