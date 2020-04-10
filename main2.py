@@ -60,7 +60,7 @@ class DataloaderCreator:
 
         if self.train:
             bucket_size_list = []
-            for data_loader in self.data_loaders[:len(self.data_loaders)-1]:
+            for data_loader in self.data_loaders[1:len(self.data_loaders)]:
                 bucket_size_list.append(math.ceil(len(data_loader.dataset)/batch_size))
             print(bucket_size_list)
             exemplar_size_list = [100, 100, 100]
@@ -202,11 +202,12 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
             buckets = train_loader_creator.buckets_list[task_idx-1]
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
-                if task_idx > 0:
-                    exemplar_data, exemplar_target = buckets[batch_idx]
-                    if exemplar_data is not None:
-                        data = torch.cat((data, exemplar_data), 0)
-                        target = torch.cat((target, exemplar_target), 0)
+                data_len = len(data)
+                #if task_idx > 0:
+                    #exemplar_data, exemplar_target = buckets[batch_idx]
+                    #if exemplar_data is not None:
+                    #    data = torch.cat((data, exemplar_data), 0)
+                    #    target = torch.cat((target, exemplar_target), 0)
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
 
@@ -241,8 +242,8 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 if batch_idx % args.log_interval == 0:
                     print('Batch labels: ' + str(torch.unique(target).tolist()))
                     print('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f} Variance: {:.6f}'.format(
-                        task_idx+1, epoch, batch_idx * len(data), len(train_loader.dataset),
-                        100. * (batch_idx * len(data)) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
+                        task_idx+1, epoch, batch_idx * data_len, len(train_loader.dataset),
+                        100. * (batch_idx * data_len) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
                         output_entropy, output_variance))
 
                     # test(args, model, device, test_loader_creator, print_entropy=False)
