@@ -27,8 +27,8 @@ def test(args, model, device, test_loader_creator, print_entropy=True):
                 output_mean = torch.cat(output_list, 0).mean(0)
                 output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
                 output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
-                test_loss += F.nll_loss(output_mean, target, reduction='sum').item()  # sum up batch loss
-                pred = output_mean.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                test_loss += F.nll_loss(output_mean, target, reduction='sum').item()
+                pred = output_mean.argmax(dim=1, keepdim=True)
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
                 for label in range(10):
@@ -43,18 +43,18 @@ def test(args, model, device, test_loader_creator, print_entropy=True):
                 for label in target.unique().tolist():
                     output_variances[label].append(output_variance)
                     output_entropies[label].append(output_entropy)
-                # print('Test labels:', target.unique().tolist(),
-                # 'Var:', output_variance, 'Entropy:', output_entropy)
 
     test_loss /= test_loaders_size
 
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, test_loaders_size,
         100. * correct / test_loaders_size))
+
     print('Per class test accuracy:')
     for label in range(10):
         print('{:4d}: {:4.0f}%'.format(label, 100. * label_correct[label]/label_all[label]), end=' ')
     print('\n')
+    
     if print_entropy:
         print('Class Variance/Entropy:')
         for label in range(10):
