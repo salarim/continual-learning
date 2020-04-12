@@ -23,7 +23,8 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
                 data, target = data.to(device), target.to(device)
                 output_list = []
                 for i in range(T):
-                    output_list.append(torch.unsqueeze(model(data), 0))
+                    score, output = model(data)
+                    output_list.append(torch.unsqueeze(output, 0))
                 output_mean = torch.cat(output_list, 0).mean(0)
                 output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
                 output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()

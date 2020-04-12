@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from termcolor import cprint
 
 from test import test
+from optim import seprated_softmax_loss
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
     T = 10
@@ -21,12 +22,17 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 optimizer.zero_grad()
 
                 output_list = []
+                score_list = []
                 for i in range(T):
-                    output_list.append(torch.unsqueeze(model(data), 0))
+                    score, output = model(data)
+                    output_list.append(torch.unsqueeze(output, 0))
+                    score_list.append(torch.unsqueeze(score, 0))
                 output_mean = torch.cat(output_list, 0).mean(0)
+                score_mean = torch.cat(score_list, 0).mean(0)
                 output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
                 output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
-                loss = F.nll_loss(output_mean, target)
+                # loss = F.nll_loss(output_mean, target)
+                loss = seprated_softmax_loss(score_mean, target, train_loader_creator.task_target_set, task_idx)
                 loss.backward()
                 # Change lr
                 # scaled_entropy = output_entropy * 100.

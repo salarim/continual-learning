@@ -22,4 +22,4 @@ class Net(nn.Module):
         x = F.relu(x)
         x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
-        return output
+        return x, output
