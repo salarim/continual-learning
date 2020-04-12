@@ -55,7 +55,7 @@ class DataloaderCreator:
             bucket_size_list = []
             for data_loader in self.data_loaders[1:len(self.data_loaders)]:
                 bucket_size_list.append(math.ceil(len(data_loader.dataset)/batch_size))
-            exemplar_size_list = [exemplar_size]*3
+            exemplar_size_list = [len(data_loader.dataset) for data_loader in self.data_loaders[1:]]
             self.buckets_list = exemplar_buckets_list = self.distribute_exemplars(bucket_size_list,
              exemplar_size_list)
 

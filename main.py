@@ -1,5 +1,8 @@
 from __future__ import print_function
 import argparse
+import os
+from time import localtime, strftime
+
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
@@ -8,6 +11,7 @@ from model import Net
 from data_utils import DataloaderCreator
 from train import train
 from test import test
+from log_utils import makedirs, get_logger
 
 
 def main():
@@ -31,12 +35,20 @@ def main():
 
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
+    parser.add_argument("--save", type=str, default="experiments/")
     args = parser.parse_args()
-    print(args, '\n')
+
+    makedirs(args.save)
+    log_file = strftime("%Y-%m-%d-%H:%M:%S", localtime())
+    python_files = [os.path.abspath(f) for f in os.listdir('.') \
+        if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
+    logger = get_logger(logpath=os.path.join(args.save, log_file),
+     filepath=os.path.abspath(__file__),
+     package_files=python_files)
+    logger.info(args)
+
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-
     torch.manual_seed(args.seed)
-
     device = torch.device("cuda" if use_cuda else "cpu")
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
@@ -50,8 +62,8 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    train(args, model, device, train_loader_creator, test_loader_creator, optimizer)
-    test(args, model, device, test_loader_creator)
+    train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
+    test(args, model, device, test_loader_creator, logger)
     # scheduler.step()
 
     if args.save_model:

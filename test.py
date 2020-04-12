@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 
 
-def test(args, model, device, test_loader_creator, print_entropy=True):
+def test(args, model, device, test_loader_creator, logger, print_entropy=True):
     test_loaders_size = 0
     for test_loader in test_loader_creator.data_loaders:
         test_loaders_size += len(test_loader.dataset)
@@ -46,17 +46,20 @@ def test(args, model, device, test_loader_creator, print_entropy=True):
 
     test_loss /= test_loaders_size
 
-    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    logger.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, test_loaders_size,
         100. * correct / test_loaders_size))
 
-    print('Per class test accuracy:')
+    logger.info('Per class test accuracy:')
+    per_class_acc = ''
     for label in range(10):
-        print('{:4d}: {:4.0f}%'.format(label, 100. * label_correct[label]/label_all[label]), end=' ')
-    print('\n')
+        per_class_acc += '{:4d}: {:4.0f}% '.format(label, 100. * label_correct[label]/label_all[label])
+    logger.info(per_class_acc)
     
     if print_entropy:
-        print('Class Variance/Entropy:')
+        logger.info('Class Variance/Entropy:')
         for label in range(10):
-            print(label, np.mean(output_variances[label]), np.mean(output_entropies[label]))
-        print('\n')
+            logger.info(str(label) + ' ' + \
+                str(np.mean(output_variances[label])) + ' ' + \
+                str(np.mean(output_entropies[label])))
+        logger.info('\n')
