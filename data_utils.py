@@ -28,8 +28,8 @@ class DataloaderCreator:
     def __init__(self, train, batch_size, shuffle, **kwargs):
         self.train = train
         mnist_dict = self.get_mnist_dict()
-        exemplar_size = 100 if train else 0
-        self.task_target_set = [[0,1,2,3], [4,5], [6,7], [8,9]]
+        exemplar_size = 500 if train else 0
+        self.task_target_set = [[0,1], [2,3], [4,5], [6,7], [8,9]]
         data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(mnist_dict, 
                             self.task_target_set,
                             exemplar_size)
@@ -56,7 +56,7 @@ class DataloaderCreator:
             for data_loader in self.data_loaders[1:len(self.data_loaders)]:
                 bucket_size_list.append(math.ceil(len(data_loader.dataset)/batch_size))
             # exemplar_size_list = [len(data_loader.dataset) for data_loader in self.data_loaders[1:]]
-            exemplar_size_list = [exemplar_size]*3
+            exemplar_size_list = [exemplar_size]*4
             self.buckets_list = exemplar_buckets_list = self.distribute_exemplars(bucket_size_list,
              exemplar_size_list)
 
