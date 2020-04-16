@@ -12,6 +12,12 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
+        x = self.get_embedding(x)
+        x = self.fc2(x)
+        output = F.log_softmax(x, dim=1)
+        return x, output
+
+    def get_embedding(self, x):
         x = F.dropout(self.conv1(x), training=True, p=self.dropout_p)
         x = F.relu(x)
         x = F.dropout(self.conv2(x), training=True, p=self.dropout_p)
@@ -20,6 +26,4 @@ class Net(nn.Module):
         x = torch.flatten(x, 1)
         x = F.dropout(self.fc1(x), training=True, p=self.dropout_p)
         x = F.relu(x)
-        x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return x, output
+        return x
