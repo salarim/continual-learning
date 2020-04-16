@@ -9,16 +9,14 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     T = 10
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
-        if task_idx > 0:
-            buckets = train_loader_creator.buckets_list[task_idx-1]
+        buckets = train_loader_creator.buckets_list[task_idx]
         for epoch in range(1,args.epochs+1):
             target_size = [0]*10 # MNIST specific
             for batch_idx, (data, target) in enumerate(train_loader):
-                if task_idx > 0:
-                    exemplar_data, exemplar_target = buckets[batch_idx]
-                    if exemplar_target is not None:
-                        data = torch.cat((data, exemplar_data), 0)
-                        target = torch.cat((target, exemplar_target), 0)
+                exemplar_data, exemplar_target = buckets[batch_idx]
+                if exemplar_target is not None:
+                    data = torch.cat((data, exemplar_data), 0)
+                    target = torch.cat((target, exemplar_target), 0)
                 for i in range(10): # MNIST specific
                     target_size[i] += torch.sum(target == i).item() # MNIST specific
                 data, target = data.to(device), target.to(device)
