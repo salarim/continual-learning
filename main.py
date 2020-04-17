@@ -10,6 +10,7 @@ from torch.optim.lr_scheduler import StepLR
 from model import Net
 from data_utils import DataloaderCreator
 from train import train
+from train_triplet import train_triplet
 from test import test
 from log_utils import makedirs, get_logger
 from visualize import plot_embedding_tsne
@@ -63,9 +64,9 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
-    test(args, model, device, test_loader_creator, logger)
-    plot_embedding_tsne(test_loader_creator, model, device)
+    train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
+    # test(args, model, device, test_loader_creator, logger)
+    plot_embedding_tsne(test_loader_creator, model, device, is_triplet=True)
     # scheduler.step()
 
     if args.save_model:

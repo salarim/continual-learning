@@ -25,11 +25,60 @@ class SimpleDataset(torch.utils.data.Dataset):
         return img, target
 
 
+class TripletDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, transform=None):
+        self.transform = transform
+        self.create_triplets(data, targets)
+
+    def create_triplets(self, data, targets):
+        ntriplets = targets.shape[0]
+
+        anchor_idxs = np.empty(0, dtype=np.int)
+        pos_idxs = np.empty(0, dtype=np.int)
+        neg_idxs = np.empty(0, dtype=np.int)
+        for target in np.unique(targets):
+            anchor_idx = np.where(targets==target)[0]
+            pos_idx = np.where(targets==target)[0]
+            while np.any((anchor_idx-pos_idx)==0):
+                np.random.shuffle(pos_idx)
+            neg_idx = np.random.choice(np.where(targets!=target)[0], len(anchor_idx), replace=True)
+            anchor_idxs = np.append(anchor_idxs, anchor_idx)
+            pos_idxs = np.append(pos_idxs, pos_idx)
+            neg_idxs = np.append(neg_idxs, neg_idx)
+
+        perm = np.random.permutation(len(anchor_idxs))
+        anchor_idxs = anchor_idxs[perm]
+        pos_idxs = pos_idxs[perm]
+        neg_idxs = neg_idxs[perm]
+
+        anchor = data[anchor_idxs]
+        pos = data[pos_idxs]
+        neg = data[neg_idxs]
+        self.data = np.stack((anchor, pos, neg))
+        self.targets = targets[anchor_idxs]
+
+        
+    def __len__(self):
+        return len(self.targets)
+
+    def __getitem__(self, idx):
+        target = int(self.targets[idx])
+        imgs = [self.data[0][idx], self.data[1][idx], self.data[2][idx]]
+        for i in range(len(imgs)):
+            imgs[i] = Image.fromarray(imgs[i], mode='L')
+
+            if self.transform is not None:
+                imgs[i] = self.transform(imgs[i])
+
+        return torch.stack((imgs[0], imgs[1], imgs[2])), target
+
+
 class DataloaderCreator:
     def __init__(self, train, batch_size, shuffle, **kwargs):
         self.train = train
         mnist_dict = self.get_mnist_dict()
-        exemplar_size = 500 if train else 0
+        exemplar_size = 0 if train else 0
         self.task_target_set = [[0,1,2,3,4], [5,6,7,8,9]]
         data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(mnist_dict, 
                             self.task_target_set,
@@ -41,14 +90,14 @@ class DataloaderCreator:
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])
         for i in range(len(target_list)):
-            dataset = SimpleDataset(data_list[i], target_list[i], transform=transform)
+            dataset = TripletDataset(data_list[i], target_list[i], transform=transform)
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
             self.data_loaders.append(data_loader)
 
         self.exemplar_datasets = []
         for i in range(len(exemplar_target_list)):
-            dataset = SimpleDataset(exemplar_data_list[i], exemplar_target_list[i],
+            dataset = TripletDataset(exemplar_data_list[i], exemplar_target_list[i],
              transform=transform)
             self.exemplar_datasets.append(dataset)
 

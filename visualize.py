@@ -4,7 +4,7 @@ from tsnecuda import TSNE
 import seaborn as sns
 
 
-def plot_embedding_tsne(data_loader_creator, model, device):
+def plot_embedding_tsne(data_loader_creator, model, device, is_triplet):
     embedding_size = model.fc2.in_features
     X = np.empty((0,embedding_size), dtype=np.float32)
     targets = np.empty((0))
@@ -12,6 +12,8 @@ def plot_embedding_tsne(data_loader_creator, model, device):
         for data_loader in data_loader_creator.data_loaders:
             for data, target in data_loader:
                 data = data.to(device)
+                if is_triplet:
+                    data = data[:,0]
                 embedding = model.get_embedding(data)
                 embedding = embedding.cpu().detach().numpy()
                 target = target.cpu().detach().numpy()
