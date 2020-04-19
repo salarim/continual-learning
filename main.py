@@ -52,6 +52,10 @@ def main():
 
     makedirs(args.save)
     log_file = args.model_type + '-' + str(args.tasks) + '-'
+    if args.oversample:
+        log_file += 'OS-'
+    if args.seprated_softmax:
+        log_file += 'SS-'
     log_file += strftime("%Y-%m-%d-%H:%M:%S", localtime())
     python_files = [os.path.abspath(f) for f in os.listdir('.') \
         if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
