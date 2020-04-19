@@ -36,6 +36,6 @@ def triplet_loss(anchor_emb, pos_emb, neg_emb, target, margin=0.02):
     dist_b = F.pairwise_distance(anchor_emb, neg_emb, 2)
     criterion = torch.nn.MarginRankingLoss(margin = margin)
     loss_triplet = criterion(dist_a, dist_b, target)
-    loss_embedd = anchor_emb.norm(2) + pos_emb.norm(2) + neg_emb.norm(2)
-    loss = loss_triplet + 0.001 * loss_embedd
+    # loss_embedd = anchor_emb.norm(2) + pos_emb.norm(2) + neg_emb.norm(2)
+    loss = loss_triplet #+ 0.001 * loss_embedd
     return loss

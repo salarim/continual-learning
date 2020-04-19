@@ -4,6 +4,7 @@ from termcolor import cprint
 
 from test import test
 from optim import triplet_loss
+from visualize import plot_embedding_tsne
 
 def train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
     T = 10
@@ -39,3 +40,5 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
                     logger.info('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
                         100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item()))
+        
+        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)

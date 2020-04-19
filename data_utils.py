@@ -75,11 +75,11 @@ class TripletDataset(torch.utils.data.Dataset):
 
 
 class DataloaderCreator:
-    def __init__(self, train, batch_size, shuffle, **kwargs):
+    def __init__(self, args, train, batch_size, shuffle, **kwargs):
         self.train = train
         mnist_dict = self.get_mnist_dict()
-        exemplar_size = 0 if train else 0
-        self.task_target_set = [[0,1,2,3,4], [5,6,7,8,9]]
+        exemplar_size = args.exemplar_size if train else 0
+        self.create_task_target_set(list(mnist_dict.keys()), args.tasks)
         data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(mnist_dict, 
                             self.task_target_set,
                             exemplar_size)
@@ -90,23 +90,32 @@ class DataloaderCreator:
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])
         for i in range(len(target_list)):
-            dataset = TripletDataset(data_list[i], target_list[i], transform=transform)
+            if args.model_type == 'softmax':
+                dataset = SimpleDataset(data_list[i], target_list[i], transform=transform)
+            elif args.model_type == 'triplet':
+                dataset = TripletDataset(data_list[i], target_list[i], transform=transform)
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
             self.data_loaders.append(data_loader)
 
         self.exemplar_datasets = []
         for i in range(len(exemplar_target_list)):
-            dataset = TripletDataset(exemplar_data_list[i], exemplar_target_list[i],
-             transform=transform)
+            if args.model_type == 'softmax':
+                dataset = SimpleDataset(exemplar_data_list[i], exemplar_target_list[i],
+                transform=transform)
+            elif args.model_type == 'triplet':
+                dataset = TripletDataset(exemplar_data_list[i], exemplar_target_list[i],
+                transform=transform)
             self.exemplar_datasets.append(dataset)
 
         if self.train:
             bucket_size_list = []
             for data_loader in self.data_loaders:
                 bucket_size_list.append(math.ceil(len(data_loader.dataset)/batch_size))
-            # exemplar_size_list = [0] + [len(data_loader.dataset) for data_loader in self.data_loaders[1:]]
-            exemplar_size_list = [0] + [exemplar_size]*(len(self.task_target_set)-1)
+            if args.oversample:
+                exemplar_size_list = [0] + [len(data_loader.dataset) for data_loader in self.data_loaders[1:]]
+            else:
+                exemplar_size_list = [0] + [exemplar_size]*(len(self.task_target_set)-1)
             self.buckets_list = self.distribute_exemplars(bucket_size_list, exemplar_size_list)
 
     
@@ -214,3 +223,13 @@ class DataloaderCreator:
             target_list.append(targets)
         
         return data_list, target_list, exemplar_data_list, exemplar_target_list
+
+    
+    def create_task_target_set(self, targets, ntasks):
+        ntargets_per_task = int(len(targets) / ntasks)
+        ntargets_first_task = ntargets_per_task + len(targets) % ntasks
+        self.task_target_set = [targets[:ntargets_first_task]]
+        target_idx = ntargets_first_task
+        for i in range(ntasks-1):
+            self.task_target_set.append(targets[target_idx: target_idx+ntargets_per_task])
+            target_idx += ntargets_per_task

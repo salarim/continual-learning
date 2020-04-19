@@ -4,6 +4,7 @@ from termcolor import cprint
 
 from test import test
 from optim import seprated_softmax_loss
+from visualize import plot_embedding_tsne
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
     T = 10
@@ -32,8 +33,11 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 score_mean = torch.cat(score_list, 0).mean(0)
                 output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
                 output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
-                loss = F.nll_loss(output_mean, target)
-                # loss = seprated_softmax_loss(score_mean, target, train_loader_creator.task_target_set, task_idx)
+                if args.seprated_softmax:
+                    loss = seprated_softmax_loss(score_mean, target,
+                     train_loader_creator.task_target_set, task_idx)
+                else:
+                    loss = F.nll_loss(output_mean, target)
                 loss.backward()                
                 optimizer.step()
 
@@ -49,3 +53,5 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
 
             logger.info('Targets size this epoch:' + str(target_size)) # MNIST specific
             test(args, model, device, test_loader_creator, logger)
+
+        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)

@@ -13,7 +13,6 @@ from train import train
 from train_triplet import train_triplet
 from test import test
 from log_utils import makedirs, get_logger
-from visualize import plot_embedding_tsne
 
 
 def main():
@@ -38,10 +37,22 @@ def main():
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     parser.add_argument("--save", type=str, default="experiments/")
+    parser.add_argument('--model-type', type=str, default='softmax',
+                        help='choose softmax or triplet')
+
+    parser.add_argument('--tasks', type=int, default=2, metavar='N',
+                    help='number of tasks (default: 2)')
+    parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
+                    help='number of exemplars (default: 0)')
+    parser.add_argument('--oversample', action='store_true', default=False,
+                        help='Oversample exemplars while training')
+    parser.add_argument('--seprated-softmax', action='store_true', default=False,
+                        help='Use seprated cross-entropy loss')
     args = parser.parse_args()
 
     makedirs(args.save)
-    log_file = strftime("%Y-%m-%d-%H:%M:%S", localtime())
+    log_file = args.model_type + '-' + str(args.tasks) + '-'
+    log_file += strftime("%Y-%m-%d-%H:%M:%S", localtime())
     python_files = [os.path.abspath(f) for f in os.listdir('.') \
         if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
     logger = get_logger(logpath=os.path.join(args.save, log_file),
@@ -54,19 +65,22 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    train_loader_creator = DataloaderCreator(train=True, batch_size=args.batch_size,
+    train_loader_creator = DataloaderCreator(args, train=True, batch_size=args.batch_size,
         shuffle=False, **kwargs)
 
-    test_loader_creator = DataloaderCreator(train=False, batch_size=args.test_batch_size,
+    test_loader_creator = DataloaderCreator(args, train=False, batch_size=args.test_batch_size,
         shuffle=False, **kwargs)
 
     model = Net().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
-    # test(args, model, device, test_loader_creator, logger)
-    plot_embedding_tsne(test_loader_creator, model, device, is_triplet=True)
+    args.vis_base_dir = 'plots/' + log_file + '/'
+    if args.model_type == 'softmax':
+        train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
+        test(args, model, device, test_loader_creator, logger)
+    elif args.model_type == 'triplet':
+        train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
     # scheduler.step()
 
     if args.save_model:
