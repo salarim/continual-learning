@@ -78,6 +78,9 @@ def main():
     model = Net().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    if args.save_model:
+        torch.save(model.state_dict(), "initial.pt")
+
     # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     args.vis_base_dir = 'plots/' + log_file + '/'
     if args.model_type == 'softmax':
@@ -87,8 +90,8 @@ def main():
         train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
     # scheduler.step()
 
-    if args.save_model:
-        torch.save(model.state_dict(), "mnist_cnn.pt")
+    # if args.save_model:
+    #     torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
 if __name__ == '__main__':
