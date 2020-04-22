@@ -17,7 +17,8 @@ class SimpleDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data[idx], int(self.targets[idx])
-        img = Image.fromarray(img, mode='L')
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
 
         if self.transform is not None:
             img = self.transform(img)
@@ -66,7 +67,8 @@ class TripletDataset(torch.utils.data.Dataset):
         target = int(self.targets[idx])
         imgs = [self.data[0][idx], self.data[1][idx], self.data[2][idx]]
         for i in range(len(imgs)):
-            imgs[i] = Image.fromarray(imgs[i], mode='L')
+            mode = 'L' if len(imgs[i].shape) == 2 else 'RGB'
+            imgs[i] = Image.fromarray(imgs[i], mode=mode)
 
             if self.transform is not None:
                 imgs[i] = self.transform(imgs[i])
@@ -136,8 +138,7 @@ class DataloaderCreator:
             if exemplar_size_list[i] > 0:
                 tmp_data, tmp_target = dataset[0]
                 data_dtype, target_dtype = tmp_data.dtype, type(tmp_target)
-                exemplars_data = torch.zeros(exemplar_size_list[i], 1, tmp_data.shape[1], tmp_data.shape[2],
-                dtype=data_dtype)
+                exemplars_data = torch.zeros((exemplar_size_list[i], 1) + tmp_data.shape[1:], dtype=data_dtype)
                 exemplars_target = torch.zeros(exemplar_size_list[i], dtype=target_dtype)
                 for j, idx in enumerate(new_exemplars_idx):
                     exemplars_data[j] = dataset[idx][0]
@@ -195,7 +196,7 @@ class DataloaderCreator:
 
         tmp_target, tmp_data = next(iter(data_dict.items()))
         data_dtype, target_dtype = tmp_data.dtype, tmp_target.dtype
-        empty_data_shape = (0, tmp_data.shape[1], tmp_data.shape[2])
+        empty_data_shape = (0,) + tmp_data.shape[1:]
 
         for i, task_targets in enumerate(task_target_set):
             targets = np.empty((0), dtype=target_dtype)
