@@ -16,7 +16,7 @@ from log_utils import makedirs, get_logger
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
     parser.add_argument('--batch-size', type=int, default=10, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
@@ -40,6 +40,8 @@ def main():
     parser.add_argument('--model-type', type=str, default='softmax',
                         help='choose softmax or triplet')
 
+    parser.add_argument('--dataset', type=str, default='mnist',
+                        help='Name of dataset. (mnist/cifar100)')
     parser.add_argument('--tasks', type=int, default=2, metavar='N',
                     help='number of tasks (default: 2)')
     parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',

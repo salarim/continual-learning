@@ -14,8 +14,8 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
     correct = 0
     label_correct = {}
     label_all = {}
-    output_variances = {i:[] for i in range(10)}
-    output_entropies = {i:[] for i in range(10)}
+    output_variances = {}
+    output_entropies = {}
 
     with torch.no_grad():
         for test_loader in test_loader_creator.data_loaders:
@@ -32,7 +32,7 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
                 pred = output_mean.argmax(dim=1, keepdim=True)
                 correct += pred.eq(target.view_as(pred)).sum().item()
 
-                for label in range(10):
+                for label in target.unique().tolist():
                     inds = (target == label)
                     corr = pred[inds,:].eq(target[inds].view_as(pred[inds,:])).sum().item()
                     if label not in label_correct:
@@ -42,6 +42,9 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
                     label_all[label] += inds.sum().item()
 
                 for label in target.unique().tolist():
+                    if label not in output_entropies:
+                        output_variances[label] = []
+                        output_entropies[label] = []
                     output_variances[label].append(output_variance)
                     output_entropies[label].append(output_entropy)
 
@@ -53,13 +56,13 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
 
     logger.info('Per class test accuracy:')
     per_class_acc = ''
-    for label in range(10):
+    for label in label_all.keys():
         per_class_acc += '{:4d}: {:4.0f}% '.format(label, 100. * label_correct[label]/label_all[label])
     logger.info(per_class_acc)
     
     if print_entropy:
         logger.info('Class Variance/Entropy:')
-        for label in range(10):
+        for label in output_variances.keys():
             logger.info(str(label) + ' ' + \
                 str(np.mean(output_variances[label])) + ' ' + \
                 str(np.mean(output_entropies[label])))

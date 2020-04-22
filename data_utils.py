@@ -77,10 +77,10 @@ class TripletDataset(torch.utils.data.Dataset):
 class DataloaderCreator:
     def __init__(self, args, train, batch_size, shuffle, **kwargs):
         self.train = train
-        mnist_dict = self.get_mnist_dict()
+        data_dict = self.get_data_dict(args)
         exemplar_size = args.exemplar_size if train else 0
-        self.create_task_target_set(list(mnist_dict.keys()), args.tasks)
-        data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(mnist_dict, 
+        self.create_task_target_set(list(data_dict.keys()), args.tasks)
+        data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(data_dict, 
                             self.task_target_set,
                             exemplar_size)
 
@@ -153,21 +153,30 @@ class DataloaderCreator:
         
         return buckets_list
 
-    def get_mnist_dict(self):
-        dataset = datasets.MNIST('../data', train=self.train, download=True)
+    def get_data_dict(self, args):
+        normalizer_2d = transforms.Normalize((0.1307,), (0.3081,))
+        normalizer_3d = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+
+        if args.dataset == 'mnist':
+            dataset = datasets.MNIST('../data', train=self.train, download=True)
+        elif args.dataset == 'cifar100':
+            dataset = datasets.CIFAR100('../data', train=self.train, download=True)
         self.transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])
-        targets = dataset.targets.numpy()
-        data = dataset.data.numpy()
+                            transforms.ToTensor(),
+                            normalizer_2d if len(dataset.data.shape) == 3 else normalizer_3d
+                        ])
+        data = dataset.data
+        targets = dataset.targets
+        if torch.is_tensor(dataset.targets):
+            data = data.numpy()
+            targets = targets.numpy()
         unique_targets = np.unique(targets)
-        mnist_dict = {}
+        data_dict = {}
         for target in unique_targets:
             idxs = targets == target
-            mnist_dict[target] = data[idxs]
+            data_dict[target] = data[idxs]
         
-        return mnist_dict
+        return data_dict
 
     
     def get_longlife_data(self, data_dict, task_target_set, exemplar_size):

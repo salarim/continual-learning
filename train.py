@@ -12,14 +12,16 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
         buckets = train_loader_creator.buckets_list[task_idx]
         for epoch in range(1,args.epochs+1):
-            target_size = [0]*10 # MNIST specific
+            target_size = {}
             for batch_idx, (data, target) in enumerate(train_loader):
                 exemplar_data, exemplar_target = buckets[batch_idx]
                 if exemplar_target is not None:
                     data = torch.cat((data, exemplar_data), 0)
                     target = torch.cat((target, exemplar_target), 0)
-                for i in range(10): # MNIST specific
-                    target_size[i] += torch.sum(target == i).item() # MNIST specific
+                for i in target.unique().tolist():
+                    if i not in target_size:
+                        target_size[i] = 0
+                    target_size[i] += torch.sum(target == i).item()
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
 
@@ -45,13 +47,13 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 correct = pred.eq(target.view_as(pred)).sum().item()
 
                 if batch_idx % args.log_interval == 0:
-                    logger.info('Batch labels: ' + str(torch.unique(target).tolist()))
+                    logger.info('Batch labels: ' + str(target.unique().tolist()))
                     logger.info('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f} Variance: {:.6f}'.format(
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
                         100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
                         output_entropy, output_variance))
 
-            logger.info('Targets size this epoch:' + str(target_size)) # MNIST specific
+            logger.info('Targets size this epoch:' + str(list(target_size.values())))
             test(args, model, device, test_loader_creator, logger)
 
         plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
