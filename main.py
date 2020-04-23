@@ -7,7 +7,7 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 
-from model import Net
+from model import get_model
 from data_utils import DataloaderCreator
 from train import train
 from train_triplet import train_triplet
@@ -77,7 +77,7 @@ def main():
     test_loader_creator = DataloaderCreator(args, train=False, batch_size=args.test_batch_size,
         shuffle=False, **kwargs)
 
-    model = Net().to(device)
+    model = get_model(args).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     if args.save_model:
