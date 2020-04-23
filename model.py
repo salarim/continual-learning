@@ -41,11 +41,8 @@ class ResNet34(nn.Module):
 
         self.feature_extractor = nn.Sequential(*list(resnet34.children())[:-1],
                                                nn.Flatten())
-        self.fc = nn.Sequential(
-                            # nn.Dropout(0.5),
-                            nn.Linear(num_feats, num_classes)
-                        )
-    
+        self.fc = nn.Linear(num_feats, num_classes)
+
     def forward(self, x):
         x = self.get_embedding(x)
         x = self.fc(x)
