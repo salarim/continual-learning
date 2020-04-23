@@ -7,7 +7,7 @@ from optim import triplet_loss
 from visualize import plot_embedding_tsne
 
 def train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
-    T = 10
+    T = 1
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
         buckets = train_loader_creator.buckets_list[task_idx]
