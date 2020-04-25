@@ -3,6 +3,7 @@ from torchvision import datasets, transforms
 from PIL import Image
 import numpy as np
 import math
+import h5py
 
 
 class SimpleDataset(torch.utils.data.Dataset):
@@ -82,10 +83,12 @@ class DataloaderCreator:
         data_dict = self.get_data_dict(args)
         exemplar_size = args.exemplar_size if train else 0
         self.create_task_target_set(list(data_dict.keys()), args.tasks)
+        print('Data dictionary created!')
         data_list, target_list, exemplar_data_list, exemplar_target_list = self.get_longlife_data(data_dict, 
                             self.task_target_set,
                             exemplar_size)
-
+        
+        print('Task data and exemplars created!')
         self.data_loaders = []
         transform=transforms.Compose([
                            transforms.ToTensor(),
@@ -119,6 +122,7 @@ class DataloaderCreator:
             else:
                 exemplar_size_list = [0] + [exemplar_size]*(len(self.task_target_set)-1)
             self.buckets_list = self.distribute_exemplars(bucket_size_list, exemplar_size_list)
+            print('Exemplars buckets list created!')
 
     
     def distribute_exemplars(self, bucket_size_list, exemplar_size_list):
@@ -159,9 +163,16 @@ class DataloaderCreator:
         normalizer_3d = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
         if args.dataset == 'mnist':
-            dataset = datasets.MNIST('../data', train=self.train, download=True)
-        elif args.dataset == 'cifar100':
-            dataset = datasets.CIFAR100('../data', train=self.train, download=True)
+            dataset = datasets.MNIST('./data', train=self.train, download=True)
+        elif args.dataset == 'cifar100/mnist':
+            dataset = datasets.CIFAR100('./data', train=self.train, download=True)
+        elif args.dataset == 'imagenet/cifar100':
+            if self.train:
+                file_path = './data/imagenet/imagenet_train_500.h5'
+            else:
+                file_path = './data/imagenet/imagenet_test_100.h5'
+            with h5py.File(file_path, 'r') as f:
+                dataset = SimpleDataset(f['data'][:], f['labels'][:])
         self.transform=transforms.Compose([
                             transforms.ToTensor(),
                             normalizer_2d if len(dataset.data.shape) == 3 else normalizer_3d

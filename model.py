@@ -32,7 +32,7 @@ class Net(nn.Module):
 
 
 class ResNet34(nn.Module):
-    def __init__(self, num_classes=100):
+    def __init__(self, num_classes):
         super(ResNet34, self).__init__()
 
         resnet34 = models.resnet34()
@@ -40,7 +40,8 @@ class ResNet34(nn.Module):
         num_feats = resnet34.fc.in_features
 
         self.feature_extractor = nn.Sequential(*list(resnet34.children())[:-1],
-                                               nn.Flatten())
+                                               nn.Flatten(),
+                                               nn.Dropout(0.5))
         self.fc = nn.Linear(num_feats, num_classes)
 
     def forward(self, x):
@@ -57,7 +58,9 @@ def get_model(args):
     if args.dataset == 'mnist':
         model = Net()
     elif args.dataset == 'cifar100':
-        model = ResNet34()
+        model = ResNet34(num_classes=100)
+    elif args.dataset == 'imagenet':
+        model = ResNet34(num_classes=1000)
     else:
         raise ValueError('dataset is not supported.')
     return model
