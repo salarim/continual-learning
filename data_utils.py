@@ -163,16 +163,18 @@ class DataloaderCreator:
         normalizer_3d = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
         if args.dataset == 'mnist':
-            dataset = datasets.MNIST('./data', train=self.train, download=True)
-        elif args.dataset == 'cifar100/mnist':
-            dataset = datasets.CIFAR100('./data', train=self.train, download=True)
-        elif args.dataset == 'imagenet/cifar100':
+            dataset = datasets.MNIST('./data/mnist', train=self.train, download=True)
+        elif args.dataset == 'cifar100':
+            dataset = datasets.CIFAR100('./data/cifar100', train=self.train, download=True)
+        elif args.dataset == 'imagenet':
             if self.train:
                 file_path = './data/imagenet/imagenet_train_500.h5'
             else:
                 file_path = './data/imagenet/imagenet_test_100.h5'
             with h5py.File(file_path, 'r') as f:
                 dataset = SimpleDataset(f['data'][:], f['labels'][:])
+        else:
+            raise ValueError('dataset is not supported.')
         self.transform=transforms.Compose([
                             transforms.ToTensor(),
                             normalizer_2d if len(dataset.data.shape) == 3 else normalizer_3d
