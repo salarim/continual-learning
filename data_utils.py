@@ -159,8 +159,12 @@ class DataloaderCreator:
         return buckets_list
 
     def get_data_dict(self, args):
-        normalizer_2d = transforms.Normalize((0.1307,), (0.3081,))
-        normalizer_3d = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        means = {'mnsit':(0.13066051707548254,),
+         'cifar100':(0.5070751592371323, 0.48654887331495095, 0.4409178433670343),
+         'imagenet':(0.4814872465839461, 0.45771731927849263, 0.4082078035692402)}
+        stds = {'mnsit':(0.30810780244715075,),
+         'cifar100':(0.2673342858792401, 0.2564384629170883, 0.27615047132568404),
+         'imagenet':(0.2606993601638989, 0.2536456316098414, 0.2685610203190189)}
 
         if args.dataset == 'mnist':
             dataset = datasets.MNIST('./data/mnist', train=self.train, download=True)
@@ -175,10 +179,21 @@ class DataloaderCreator:
                 dataset = SimpleDataset(f['data'][:], f['labels'][:])
         else:
             raise ValueError('dataset is not supported.')
-        self.transform=transforms.Compose([
-                            transforms.ToTensor(),
-                            normalizer_2d if len(dataset.data.shape) == 3 else normalizer_3d
-                        ])
+        
+        if self.train:
+            self.transform=transforms.Compose([
+                                transforms.RandomCrop(32, padding=4),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.RandomRotation(15),
+                                transforms.ToTensor(),
+                                transforms.Normalize(means[args.dataset], stds[args.dataset])
+                            ])
+        else:
+            self.transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(means[args.dataset], stds[args.dataset])
+                            ])
+        
         data = dataset.data
         targets = dataset.targets
         if torch.is_tensor(dataset.targets):
