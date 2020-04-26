@@ -54,16 +54,16 @@ def test(args, model, device, test_loader_creator, logger, print_entropy=True):
         test_loss, correct, test_loaders_size,
         100. * correct / test_loaders_size))
 
-    logger.info('Per class test accuracy:')
-    per_class_acc = ''
-    for label in sorted(label_all.keys()):
-        per_class_acc += '{:4d}: {:4.0f}% '.format(label, 100. * label_correct[label]/label_all[label])
-    logger.info(per_class_acc)
+    # logger.info('Per class test accuracy:')
+    # per_class_acc = ''
+    # for label in sorted(label_all.keys()):
+    #     per_class_acc += '{:4d}: {:4.0f}% '.format(label, 100. * label_correct[label]/label_all[label])
+    # logger.info(per_class_acc)
     
-    if print_entropy:
-        logger.info('Class Variance/Entropy:')
-        for label in sorted(output_variances.keys()):
-            logger.info(str(label) + ' ' + \
-                str(np.mean(output_variances[label])) + ' ' + \
-                str(np.mean(output_entropies[label])))
-        logger.info('\n')
+    # if print_entropy:
+    #     logger.info('Class Variance/Entropy:')
+    #     for label in sorted(output_variances.keys()):
+    #         logger.info(str(label) + ' ' + \
+    #             str(np.mean(output_variances[label])) + ' ' + \
+    #             str(np.mean(output_entropies[label])))
+    #     logger.info('\n')

@@ -41,7 +41,7 @@ def main():
                         help='choose softmax or triplet')
 
     parser.add_argument('--dataset', type=str, default='mnist',
-                        help='Name of dataset. (mnist/cifar100)')
+                        help='Name of dataset. (mnist/cifar10/cifar100/imagenet)')
     parser.add_argument('--tasks', type=int, default=2, metavar='N',
                     help='number of tasks (default: 2)')
     parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
@@ -78,7 +78,7 @@ def main():
         shuffle=False, **kwargs)
 
     model = get_model(args).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
 
     if args.save_model:
         torch.save(model.state_dict(), "initial.pt")
@@ -92,8 +92,6 @@ def main():
         train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
     # scheduler.step()
 
-    # if args.save_model:
-    #     torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
 if __name__ == '__main__':

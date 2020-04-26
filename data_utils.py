@@ -90,15 +90,11 @@ class DataloaderCreator:
         
         print('Task data and exemplars created!')
         self.data_loaders = []
-        transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])
         for i in range(len(target_list)):
             if args.model_type == 'softmax':
-                dataset = SimpleDataset(data_list[i], target_list[i], transform=transform)
+                dataset = SimpleDataset(data_list[i], target_list[i], transform=self.transform)
             elif args.model_type == 'triplet':
-                dataset = TripletDataset(data_list[i], target_list[i], transform=transform)
+                dataset = TripletDataset(data_list[i], target_list[i], transform=self.transform)
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
             self.data_loaders.append(data_loader)
@@ -107,10 +103,10 @@ class DataloaderCreator:
         for i in range(len(exemplar_target_list)):
             if args.model_type == 'softmax':
                 dataset = SimpleDataset(exemplar_data_list[i], exemplar_target_list[i],
-                transform=transform)
+                transform=self.transform)
             elif args.model_type == 'triplet':
                 dataset = TripletDataset(exemplar_data_list[i], exemplar_target_list[i],
-                transform=transform)
+                transform=self.transform)
             self.exemplar_datasets.append(dataset)
 
         if self.train:
@@ -159,15 +155,19 @@ class DataloaderCreator:
         return buckets_list
 
     def get_data_dict(self, args):
-        means = {'mnsit':(0.13066051707548254,),
+        means = {'mnist':(0.13066051707548254,),
+         'cifar10':(0.49139967861519607, 0.48215840839460783, 0.44653091444546567),
          'cifar100':(0.5070751592371323, 0.48654887331495095, 0.4409178433670343),
          'imagenet':(0.4814872465839461, 0.45771731927849263, 0.4082078035692402)}
-        stds = {'mnsit':(0.30810780244715075,),
+        stds = {'mnist':(0.30810780244715075,),
+         'cifar10':(0.2470322324632819, 0.24348512800005573, 0.26158784172796434),
          'cifar100':(0.2673342858792401, 0.2564384629170883, 0.27615047132568404),
          'imagenet':(0.2606993601638989, 0.2536456316098414, 0.2685610203190189)}
 
         if args.dataset == 'mnist':
             dataset = datasets.MNIST('./data/mnist', train=self.train, download=True)
+        elif args.dataset == 'cifar10':
+            dataset = datasets.CIFAR10('./data/cifar10', train=self.train, download=True)
         elif args.dataset == 'cifar100':
             dataset = datasets.CIFAR100('./data/cifar100', train=self.train, download=True)
         elif args.dataset == 'imagenet':

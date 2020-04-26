@@ -47,13 +47,13 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 correct = pred.eq(target.view_as(pred)).sum().item()
 
                 if batch_idx % args.log_interval == 0:
-                    logger.info('Batch labels: ' + str(target.unique().tolist()))
+                    # logger.info('Batch labels: ' + str(target.unique().tolist()))
                     logger.info('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f} Variance: {:.6f}'.format(
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
                         100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
                         output_entropy, output_variance))
 
-            logger.info('Targets size this epoch:' + str(list(target_size.values())))
+            # logger.info('Targets size this epoch:' + ' '.join([str(k) + ':' + str(v) + ',' for k,v in target_size.items()]))
             test(args, model, device, test_loader_creator, logger)
 
         plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
