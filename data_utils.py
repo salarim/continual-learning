@@ -187,9 +187,6 @@ class DataloaderCreator:
         
         if self.train:
             self.transform=transforms.Compose([
-                                transforms.RandomCrop(32, padding=4),
-                                transforms.RandomHorizontalFlip(),
-                                transforms.RandomRotation(15),
                                 transforms.ToTensor(),
                                 transforms.Normalize(means[args.dataset], stds[args.dataset])
                             ])

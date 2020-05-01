@@ -20,57 +20,57 @@ from train_triplet import train_triplet
 from test import test
 from log_utils import makedirs, get_logger
 
-    parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
-    parser.add_argument('--batch-size', type=int, default=10, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=5, metavar='N',
-                        help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
-                        help='learning rate (default: 1.0)')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--seed', default=None, type=int,
-                    help='seed for initializing training. ')
-    parser.add_argument('--log-interval', type=int, default=1, metavar='N',
-                        help='how many batches to wait before logging training status')
+parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
+parser.add_argument('--batch-size', type=int, default=10, metavar='N',
+                    help='input batch size for training (default: 64)')
+parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
+                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--epochs', type=int, default=5, metavar='N',
+                    help='number of epochs to train (default: 14)')
+parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+                    help='learning rate (default: 1.0)')
+parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
+                    help='Learning rate step gamma (default: 0.7)')
+parser.add_argument('--seed', default=None, type=int,
+                help='seed for initializing training. ')
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before logging training status')
 
-    parser.add_argument('--save-model', action='store_true', default=False,
-                        help='For Saving the current Model')
-    parser.add_argument("--save", type=str, default="experiments/")
-    parser.add_argument('--model-type', type=str, default='softmax',
-                        help='choose softmax or triplet')
+parser.add_argument('--save-model', action='store_true', default=False,
+                    help='For Saving the current Model')
+parser.add_argument("--save", type=str, default="experiments/")
+parser.add_argument('--model-type', type=str, default='softmax',
+                    help='choose softmax or triplet')
 
-    parser.add_argument('--dataset', type=str, default='mnist',
-                        help='Name of dataset. (mnist/cifar10/cifar100/imagenet)')
-    parser.add_argument('--tasks', type=int, default=2, metavar='N',
-                    help='number of tasks (default: 2)')
-    parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
-                    help='number of exemplars (default: 0)')
-    parser.add_argument('--oversample', action='store_true', default=False,
-                        help='Oversample exemplars while training')
-    parser.add_argument('--seprated-softmax', action='store_true', default=False,
-                        help='Use seprated cross-entropy loss')
+parser.add_argument('--dataset', type=str, default='mnist',
+                    help='Name of dataset. (mnist/cifar10/cifar100/imagenet)')
+parser.add_argument('--tasks', type=int, default=2, metavar='N',
+                help='number of tasks (default: 2)')
+parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
+                help='number of exemplars (default: 0)')
+parser.add_argument('--oversample', action='store_true', default=False,
+                    help='Oversample exemplars while training')
+parser.add_argument('--seprated-softmax', action='store_true', default=False,
+                    help='Use seprated cross-entropy loss')
 
-    # device arguments
-    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
-                    help='number of data loading workers (default: 4)')
-    parser.add_argument('--gpu', default=None, type=int,
-                    help='GPU id to use.')
-    parser.add_argument('--dist-url', default='tcp://127.0.0.1:23456', type=str,
-                    help='url used to set up distributed training')
-    parser.add_argument('--dist-backend', default='nccl', type=str,
-                    help='distributed backend')
-    parser.add_argument('--world-size', default=-1, type=int,
-                    help='number of nodes for distributed training')
-    parser.add_argument('--rank', default=-1, type=int,
-                    help='node rank for distributed training')
-    parser.add_argument('--multiprocessing-distributed', action='store_true',
-                    help='Use multi-processing distributed training to launch '
-                         'N processes per node, which has N GPUs. This is the '
-                         'fastest way to use PyTorch for either single node or '
-                         'multi node data parallel training')
+# device arguments
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                help='number of data loading workers (default: 4)')
+parser.add_argument('--gpu', default=None, type=int,
+                help='GPU id to use.')
+parser.add_argument('--dist-url', default='tcp://127.0.0.1:23456', type=str,
+                help='url used to set up distributed training')
+parser.add_argument('--dist-backend', default='nccl', type=str,
+                help='distributed backend')
+parser.add_argument('--world-size', default=-1, type=int,
+                help='number of nodes for distributed training')
+parser.add_argument('--rank', default=-1, type=int,
+                help='node rank for distributed training')
+parser.add_argument('--multiprocessing-distributed', action='store_true',
+                help='Use multi-processing distributed training to launch '
+                        'N processes per node, which has N GPUs. This is the '
+                        'fastest way to use PyTorch for either single node or '
+                        'multi node data parallel training')
 
 
 def main():
@@ -116,7 +116,7 @@ def main_worker(gpu, ngpus_per_node, args):
         log_file += 'OS-'
     if args.seprated_softmax:
         log_file += 'SS-'
-    log_file += strftime("%Y-%m-%d-%H:%M:%S", localtime())
+    log_file += strftime("%Y-%m-%d-%H:%M:%S", localtime()) + '-'
     log_file += str(gpu)
     python_files = [os.path.abspath(f) for f in os.listdir('.') \
         if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
@@ -139,7 +139,7 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    model = get_model(args).to(device)
+    model = get_model(args)
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
@@ -162,9 +162,9 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-    else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
+    # else:
+    #     # DataParallel will divide and allocate batch_size to all available GPUs
+    #     model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
 
 
 
@@ -175,7 +175,7 @@ def main_worker(gpu, ngpus_per_node, args):
     test_loader_creator = DataloaderCreator(args, train=False, batch_size=args.test_batch_size,
         shuffle=False, **kwargs)
 
-    device = torch.device("cuda:{}".format(args.gpu) if args.gpu else "cpu")
+    device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
 
     if args.save_model:
