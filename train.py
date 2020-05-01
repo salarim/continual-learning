@@ -4,7 +4,7 @@ from termcolor import cprint
 
 from test import test
 from optim import seprated_softmax_loss
-from visualize import plot_embedding_tsne
+# from visualize import plot_embedding_tsne
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
     T = 1
@@ -56,7 +56,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
             # logger.info('Targets size this epoch:' + ' '.join([str(k) + ':' + str(v) + ',' for k,v in target_size.items()]))
             test(args, model, device, test_loader_creator, logger)
 
-        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
             torch.save(model.state_dict(), model_path)

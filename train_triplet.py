@@ -4,7 +4,7 @@ from termcolor import cprint
 
 from test import test
 from optim import triplet_loss
-from visualize import plot_embedding_tsne
+# from visualize import plot_embedding_tsne
 
 def train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
     T = 1
@@ -41,7 +41,7 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
                         100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item()))
         
-        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
             torch.save(model.state_dict(), model_path)
