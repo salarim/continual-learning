@@ -96,7 +96,7 @@ class DataloaderCreator:
                 dataset = SimpleDataset(data_list[i], target_list[i], transform=self.transform)
             elif args.model_type == 'triplet':
                 dataset = TripletDataset(data_list[i], target_list[i], transform=self.transform)
-            if args.distributed:
+            if args.distributed and self.train:
                 sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             else:
                 sampler = None
