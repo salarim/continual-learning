@@ -1,4 +1,5 @@
 import torch
+import torch.utils.data.distributed
 from torchvision import datasets, transforms
 from PIL import Image
 import numpy as np
@@ -95,8 +96,12 @@ class DataloaderCreator:
                 dataset = SimpleDataset(data_list[i], target_list[i], transform=self.transform)
             elif args.model_type == 'triplet':
                 dataset = TripletDataset(data_list[i], target_list[i], transform=self.transform)
+            if args.distributed:
+                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+            else:
+                sampler = None
             data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
+                dataset, batch_size=batch_size, shuffle=shuffle, sampler=sampler, **kwargs)
             self.data_loaders.append(data_loader)
 
         self.exemplar_datasets = []
