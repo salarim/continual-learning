@@ -116,7 +116,7 @@ def main_worker(gpu, ngpus_per_node, args):
         log_file += 'OS-'
     if args.seprated_softmax:
         log_file += 'SS-'
-    log_file += strftime("%Y-%m-%d-%H:%M:%S", localtime()) + '-'
+    log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
     log_file += str(gpu)
     python_files = [os.path.abspath(f) for f in os.listdir('.') \
         if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
