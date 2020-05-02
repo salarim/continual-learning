@@ -10,13 +10,8 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
     T = 1
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
-        buckets = train_loader_creator.buckets_list[task_idx]
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
-                exemplar_data, exemplar_target = buckets[batch_idx]
-                if exemplar_target is not None:
-                    data = torch.cat((data, exemplar_data), 0)
-                    target = torch.cat((target, exemplar_target), 0)
                 data, target = data.to(device), target.to(device)
                 anchor, pos, neg = data[:,0], data[:,1], data[:,2]
                 optimizer.zero_grad()

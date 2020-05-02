@@ -10,14 +10,9 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     T = 1
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
-        buckets = train_loader_creator.buckets_list[task_idx]
         for epoch in range(1,args.epochs+1):
             target_size = {}
             for batch_idx, (data, target) in enumerate(train_loader):
-                exemplar_data, exemplar_target = buckets[batch_idx]
-                if exemplar_target is not None:
-                    data = torch.cat((data, exemplar_data), 0)
-                    target = torch.cat((target, exemplar_target), 0)
                 for i in target.unique().tolist():
                     if i not in target_size:
                         target_size[i] = 0
@@ -37,7 +32,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
                 if args.seprated_softmax:
                     loss = seprated_softmax_loss(score_mean, target,
-                     train_loader_creator.task_target_set, task_idx)
+                     train_loader_creator.continual_constructor.task_targets_set, task_idx)
                 else:
                     loss = F.nll_loss(output_mean, target)
                 loss.backward()                

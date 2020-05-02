@@ -14,7 +14,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from model import get_model
-from data_utils import DataloaderCreator
+from data_utils_rewrite import DataLoaderConstructor
 from train import train
 from train_triplet import train_triplet
 from test import test
@@ -48,8 +48,8 @@ parser.add_argument('--tasks', type=int, default=2, metavar='N',
                 help='number of tasks (default: 2)')
 parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
                 help='number of exemplars (default: 0)')
-parser.add_argument('--oversample', action='store_true', default=False,
-                    help='Oversample exemplars while training')
+parser.add_argument('--oversample-ratio', type=float, default=0.0, metavar='M',
+                help='oversampling ratio (default: 0.0')
 parser.add_argument('--seprated-softmax', action='store_true', default=False,
                     help='Use seprated cross-entropy loss')
 
@@ -112,7 +112,7 @@ def main():
 
 def main_worker(gpu, ngpus_per_node, args):
     log_file = args.model_type + '-' + str(args.tasks) + '-'
-    if args.oversample:
+    if args.oversample_ratio > 0.0:
         log_file += 'OS-'
     if args.seprated_softmax:
         log_file += 'SS-'
@@ -169,11 +169,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
     kwargs = {'num_workers': args.workers, 'pin_memory': True} if args.gpu else {}
-    train_loader_creator = DataloaderCreator(args, train=True, batch_size=args.batch_size,
-        shuffle=False, **kwargs)
+    train_loader_creator = DataLoaderConstructor(args, train=True, **kwargs)
 
-    test_loader_creator = DataloaderCreator(args, train=False, batch_size=args.test_batch_size,
-        shuffle=False, **kwargs)
+    test_loader_creator = DataLoaderConstructor(args, train=False, **kwargs)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
