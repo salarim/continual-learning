@@ -14,7 +14,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from model import get_model
-from data_utils_rewrite import DataLoaderConstructor
+from data_utils import DataLoaderConstructor
 from train import train
 from train_triplet import train_triplet
 from test import test
