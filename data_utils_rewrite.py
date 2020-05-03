@@ -17,9 +17,8 @@ class DataLoaderConstructor:
 
         self.continual_constructor = ContinualIndexConstructor(args, original_targets, train)
         
-        batch_size = args.batch_size if train else args.test_batch_size
-        self.data_loaders = self.create_dataloaders(original_data,
-                                                    original_targets, batch_size, **kwargs)
+        self.data_loaders = self.create_dataloaders(args, original_data,
+                                                    original_targets, transforms, **kwargs)
 
     def get_data_targets(self, dataset_name):
         if dataset_name == 'mnist':
@@ -65,22 +64,24 @@ class DataLoaderConstructor:
         }
 
         transforms = []
-        if dataste_name in ['cifar10', 'cifar100', 'imagenet']:
+        if dataset_name in ['cifar10', 'cifar100', 'imagenet']:
             transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
                                 torchvision.transforms.RandomHorizontalFlip(),
                                 torchvision.transforms.RandomRotation(15)])
         transforms.extend([torchvision.transforms.ToTensor(),
-                            torchvision.transforms.Normalize(means[dataste_name],
-                                                             stds[dataste_name])])
+                            torchvision.transforms.Normalize(means[dataset_name],
+                                                             stds[dataset_name])])
         return torchvision.transforms.Compose(transforms)
 
-    def create_dataloaders(self, data, targets, batch_size, **kwargs):
+    def create_dataloaders(self, args, data, targets, transforms,**kwargs):
         data_loaders = []
+
+        batch_size = args.batch_size if self.train else args.test_batch_size
         for task_indexes in self.continual_constructor.indexes:
             if args.model_type == 'softmax':
-                dataset = SimpleDataset(data, targets, task_indexes, transform=self.transforms)
+                dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
             elif args.model_type == 'triplet':
-                dataset = TripletDataset(data, targets, task_indexes, transform=self.transforms)
+                dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
             if args.distributed and self.train:
                 sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             else:
