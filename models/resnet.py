@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .utils import MultiHeadLinear, init_module
 
@@ -101,7 +102,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 32, n, stride=2)
         self.layer3 = self._make_layer(block, 64, n, stride=2)
         self.avgpool = nn.AvgPool2d(8)
-        self.classifier = MultiHeadLinear(64 * block.expansion, num_classes)
+        self.classifier = MultiHeadLinear(64 * block.expansion, num_classes, no_grad=False)
 
         init_module(self)
 

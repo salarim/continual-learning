@@ -6,6 +6,7 @@ class MultiHeadLinear(nn.ModuleList):
     def __init__(self, in_features, out_features, bias=True, no_grad=True):
         super(MultiHeadLinear, self).__init__()
 
+        self.in_features = in_features
         self.out_features = out_features
         for _ in range(out_features):
             self.append(nn.Linear(in_features, 1, bias))

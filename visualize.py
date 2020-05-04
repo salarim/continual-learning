@@ -7,7 +7,7 @@ from log_utils import makedirs
 
 
 def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
-    embedding_size = model.fc.in_features
+    embedding_size = model.classifier.in_features
     X = np.empty((0,embedding_size), dtype=np.float32)
     targets = np.empty((0))
     with torch.no_grad():

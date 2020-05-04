@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class SimpleNet(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
+        super(SimpleNet, self).__init__()
         self.dropout_p = 0.5
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
