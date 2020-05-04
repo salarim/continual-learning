@@ -6,7 +6,6 @@ import warnings
 
 import torch
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
 
 import torch.nn.parallel
 import torch.multiprocessing as mp
@@ -27,14 +26,18 @@ parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--epochs', type=int, default=5, metavar='N',
                     help='number of epochs to train (default: 14)')
-parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
-                    help='learning rate (default: 1.0)')
-parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                    help='Learning rate step gamma (default: 0.7)')
+parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                    help='learning rate (default: 0.1)')
+parser.add_argument('--gamma', type=float, default=0.1, metavar='M',
+                    help='Learning rate step gamma (default: 0.1)')
 parser.add_argument('--seed', default=None, type=int,
                 help='seed for initializing training. ')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
+parser.add_argument('--test-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before testing model')
+parser.add_argument('--acc-per-class', action='store_true', default=False,
+                    help='log accuracy of model per class')
 
 parser.add_argument('--save-model', action='store_true', default=False,
                     help='For Saving the current Model')
@@ -176,18 +179,19 @@ def main_worker(gpu, ngpus_per_node, args):
     test_loader_creator = DataLoaderConstructor(args, train=False, **kwargs)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     if args.save_model:
         torch.save(model.state_dict(), "initial.pt")
 
-    # scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     args.vis_base_dir = 'plots/' + log_file + '/'
     if args.model_type == 'softmax':
-        train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
+        train(args, model, device, train_loader_creator,
+         test_loader_creator, optimizer, logger)
         test(args, model, device, test_loader_creator, logger)
     elif args.model_type == 'triplet':
-        train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger)
+        train_triplet(args, model, device, train_loader_creator,
+         test_loader_creator, optimizer, logger)
     # scheduler.step()
 
 

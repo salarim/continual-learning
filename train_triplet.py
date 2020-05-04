@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
 from test import test
@@ -10,6 +11,11 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
     T = 1
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=[50, 100], gamma=args.gamma)
+
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
                 data, target = data.to(device), target.to(device)
@@ -30,9 +36,10 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
                 loss = triplet_loss(anchor_emb, pos_emb, neg_emb, y)
                 loss.backward()                
                 optimizer.step()
+                scheduler.step()
 
                 if batch_idx % args.log_interval == 0:
-                    logger.info('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    logger.info('Train Task: {} Epoch: {} [{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f}'.format(
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
                         100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item()))
         

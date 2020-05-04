@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
 from test import test
@@ -10,6 +11,11 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
     T = 1
     model.train()
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=[50, 100], gamma=args.gamma)
+
         for epoch in range(1,args.epochs+1):
             target_size = {}
             for batch_idx, (data, target) in enumerate(train_loader):
@@ -28,8 +34,8 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                     score_list.append(torch.unsqueeze(score, 0))
                 output_mean = torch.cat(output_list, 0).mean(0)
                 score_mean = torch.cat(score_list, 0).mean(0)
-                output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
-                output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
+                # output_variance = torch.cat(output_list, 0).var(dim=0).mean().item()
+                # output_entropy = (-output_mean.exp() * output_mean).sum(dim=1).mean().item()
                 if args.seprated_softmax:
                     loss = seprated_softmax_loss(score_mean, target,
                      train_loader_creator.continual_constructor.task_targets_set, task_idx)
@@ -37,19 +43,20 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                     loss = F.nll_loss(output_mean, target)
                 loss.backward()                
                 optimizer.step()
+                scheduler.step()
 
                 pred = output_mean.argmax(dim=1, keepdim=True)
                 correct = pred.eq(target.view_as(pred)).sum().item()
 
                 if batch_idx % args.log_interval == 0:
                     # logger.info('Batch labels: ' + str(target.unique().tolist()))
-                    logger.info('Train Task: {} Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f} Entropy: {:.6f} Variance: {:.6f}'.format(
+                    logger.info('Train Task: {} Epoch: {} [{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f} Batch_Acc: {:.2f}'.format(
                         task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
-                        100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item(), correct / target.shape[0],
-                        output_entropy, output_variance))
+                        100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item(), correct / target.shape[0]))
 
             # logger.info('Targets size this epoch:' + ' '.join([str(k) + ':' + str(v) + ',' for k,v in target_size.items()]))
-            test(args, model, device, test_loader_creator, logger)
+            if epoch % args.test_interval == 0:
+                test(args, model, device, test_loader_creator, logger)
 
         # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
