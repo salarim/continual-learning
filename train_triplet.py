@@ -14,7 +14,7 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = args.lr
-        scheduler = MultiStepLR(optimizer, milestones=[50, 100], gamma=args.gamma)
+        scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):

@@ -20,12 +20,12 @@ from test import test
 from log_utils import makedirs, get_logger
 
 parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
-parser.add_argument('--batch-size', type=int, default=10, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--test-batch-size', type=int, default=64, metavar='N',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=5, metavar='N',
-                    help='number of epochs to train (default: 14)')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 128)')
+parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for testing (default: 128)')
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
+                    help='number of epochs to train (default: 100)')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='learning rate (default: 0.1)')
 parser.add_argument('--gamma', type=float, default=0.1, metavar='M',
@@ -44,7 +44,7 @@ parser.add_argument('--save-model', action='store_true', default=False,
 parser.add_argument("--save", type=str, default="experiments/")
 parser.add_argument('--model-type', type=str, default='softmax',
                     help='choose softmax or triplet')
-parser.add_argument('--depth', type=int, default=14, metavar='N',
+parser.add_argument('--depth', type=int, default=20, metavar='N',
                     help='Model depth')
 
 parser.add_argument('--dataset', type=str, default='mnist',
@@ -179,7 +179,7 @@ def main_worker(gpu, ngpus_per_node, args):
     test_loader_creator = DataLoaderConstructor(args, train=False, **kwargs)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
     if args.save_model:
         torch.save(model.state_dict(), "initial.pt")
