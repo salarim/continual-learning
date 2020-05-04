@@ -43,7 +43,7 @@ class DataLoaderConstructor:
         else:
             raise ValueError('dataset is not supported.')
             
-        if torch.is_tensor(dataset.targets):
+        if torch.is_tensor(targets):
             data = data.numpy()
             targets = targets.numpy()
         
