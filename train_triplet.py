@@ -8,8 +8,8 @@ from optim import triplet_loss
 # from visualize import plot_embedding_tsne
 
 def train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
-    T = 1
     model.train()
+
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
 
         for param_group in optimizer.param_groups:
@@ -18,30 +18,31 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
 
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):
+
                 data, target = data.to(device), target.to(device)
-                anchor, pos, neg = data[:,0], data[:,1], data[:,2]
+
                 optimizer.zero_grad()
 
-                embedding_means = []
+                embeddings = []
                 for i in range(3):
-                    embedding_list = []
-                    for j in range(T):
-                        embedding = model.get_embedding(data[:,i])
-                        embedding_list.append(torch.unsqueeze(embedding, 0))
-                    embedding_mean = torch.cat(embedding_list, 0).mean(0)
-                    embedding_means.append(embedding_mean)
+                    embedding = model.get_embedding(data[:,i])
+                    embeddings.append(embedding)
+                anchor_emb, pos_emb, neg_emb = embeddings[0], embeddings[1], embeddings[2]
 
-                anchor_emb, pos_emb, neg_emb = embedding_means[0], embedding_means[1], embedding_means[2]
                 y = torch.FloatTensor(anchor_emb.shape[0]).fill_(-1).to(device)
                 loss = triplet_loss(anchor_emb, pos_emb, neg_emb, y)
+                
                 loss.backward()                
                 optimizer.step()
                 scheduler.step()
 
                 if batch_idx % args.log_interval == 0:
-                    logger.info('Train Task: {} Epoch: {} [{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f}'.format(
-                        task_idx+1, epoch, batch_idx * args.batch_size, len(train_loader.dataset),
-                        100. * (batch_idx * args.batch_size) / len(train_loader.dataset), loss.item()))
+                    logger.info('Train Task: {} Epoch: {} '
+                                '[{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f}'.format(
+                                task_idx+1, epoch, batch_idx * args.batch_size,
+                                len(train_loader.dataset),
+                                100. * (batch_idx * args.batch_size) / len(train_loader.dataset),
+                                loss.item()))
         
         # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:

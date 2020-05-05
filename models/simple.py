@@ -14,9 +14,10 @@ class SimpleNet(nn.Module):
 
     def forward(self, x):
         x = self.get_embedding(x)
+
         x = self.classifier(x)
-        output = F.log_softmax(x, dim=1)
-        return x, output
+        
+        return x
 
     def get_embedding(self, x):
         x = F.dropout(self.conv1(x), training=True, p=self.dropout_p)

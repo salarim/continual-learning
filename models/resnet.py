@@ -125,11 +125,10 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         x = self.get_embedding(x)
-        x = self.classifier(x)
-        
-        output = F.log_softmax(x, dim=1)
 
-        return x, output
+        x = self.classifier(x)
+
+        return x
 
     def get_embedding(self, x):
         x = self.conv1(x)

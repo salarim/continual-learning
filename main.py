@@ -55,8 +55,6 @@ parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
                 help='number of exemplars (default: 0)')
 parser.add_argument('--oversample-ratio', type=float, default=0.0, metavar='M',
                 help='oversampling ratio (default: 0.0')
-parser.add_argument('--seprated-softmax', action='store_true', default=False,
-                    help='Use seprated cross-entropy loss')
 
 # device arguments
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -119,8 +117,6 @@ def main_worker(gpu, ngpus_per_node, args):
     log_file = args.model_type + '-' + str(args.tasks) + '-'
     if args.oversample_ratio > 0.0:
         log_file += 'OS-'
-    if args.seprated_softmax:
-        log_file += 'SS-'
     log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
     log_file += str(gpu)
     python_files = [os.path.abspath(f) for f in os.listdir('.') \
