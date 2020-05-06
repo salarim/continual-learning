@@ -4,6 +4,7 @@ from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
 from test import test, accuracy
+from log_utils import AverageMeter
 # from visualize import plot_embedding_tsne
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
@@ -18,7 +19,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
         scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
-            
+
             losses = AverageMeter()
             acc = AverageMeter()
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+from log_utils import AverageMeter
 
 def test(args, model, device, test_loader_creator, logger):
     model.eval()
