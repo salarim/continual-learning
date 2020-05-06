@@ -8,8 +8,7 @@ from log_utils import AverageMeter
 # from visualize import plot_embedding_tsne
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
-    model.train()
-    
+
     criterion = torch.nn.CrossEntropyLoss().to(device)
 
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
@@ -19,7 +18,8 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
         scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
-
+            
+            model.train()
             losses = AverageMeter()
             acc = AverageMeter()
 
