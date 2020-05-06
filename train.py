@@ -34,7 +34,6 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
 
                 loss.backward()                
                 optimizer.step()
-                scheduler.step()
 
                 it_acc = accuracy(output.data, target)[0]
                 losses.update(loss.item(), data.size(0))
@@ -47,6 +46,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                             task_idx+1, epoch, batch_idx, len(train_loader),
                             loss=losses, acc=acc))
 
+            scheduler.step()
             if epoch % args.test_interval == 0:
                 test(args, model, device, test_loader_creator, logger)
 
