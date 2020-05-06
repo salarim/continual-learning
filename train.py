@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
-from test import test
+from test import test, accuracy
 # from visualize import plot_embedding_tsne
 
 def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
@@ -18,13 +18,11 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
         scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
-            target_size = {}
-            for batch_idx, (data, target) in enumerate(train_loader):
+            
+            losses = AverageMeter()
+            acc = AverageMeter()
 
-                for i in target.unique().tolist():
-                    if i not in target_size:
-                        target_size[i] = 0
-                    target_size[i] += torch.sum(target == i).item()
+            for batch_idx, (data, target) in enumerate(train_loader):
 
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
@@ -37,18 +35,16 @@ def train(args, model, device, train_loader_creator, test_loader_creator, optimi
                 optimizer.step()
                 scheduler.step()
 
-                pred = output.argmax(dim=1, keepdim=True)
-                correct = pred.eq(target.view_as(pred)).sum().item()
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
 
                 if batch_idx % args.log_interval == 0:
-                    # logger.info('Batch labels: ' + str(target.unique().tolist()))
-                    logger.info('Train Task: {} Epoch: {}'
-                                '[{:7d}/{:7d} ({:3.0f}%)]'
-                                '\tLoss: {:.6f} Batch_Acc: {:.2f}'.format(
-                                task_idx+1, epoch,
-                                batch_idx * args.batch_size, len(train_loader.dataset),
-                                100. * (batch_idx * args.batch_size) / len(train_loader.dataset),
-                                loss.item(), correct / target.shape[0]))
+                    logger.info('Train Task: {0} Epoch: [{1}][{2}/{3}]\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader),
+                            loss=losses, acc=acc))
 
             if epoch % args.test_interval == 0:
                 test(args, model, device, test_loader_creator, logger)

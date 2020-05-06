@@ -4,50 +4,47 @@ import numpy as np
 
 
 def test(args, model, device, test_loader_creator, logger):
-    test_loaders_size = 0
-    for test_loader in test_loader_creator.data_loaders:
-        test_loaders_size += len(test_loader.dataset)
-
     model.eval()
 
     criterion = torch.nn.CrossEntropyLoss().to(device)
 
-    test_loss = 0
-    correct = 0
-    label_correct = {}
-    label_all = {}
-
     with torch.no_grad():
         for test_loader in test_loader_creator.data_loaders:
+
+            losses = AverageMeter()
+            acc = AverageMeter()
+
             for data, target in test_loader:
 
                 data, target = data.to(device), target.to(device)
-                
                 output = model(data)
-                
-                test_loss += criterion(output, target).item()
 
-                pred = output.argmax(dim=1, keepdim=True)
-                correct += pred.eq(target.view_as(pred)).sum().item()
+                loss = criterion(output, target)
 
-                for label in target.unique().tolist():
-                    inds = (target == label)
-                    corr = pred[inds,:].eq(target[inds].view_as(pred[inds,:])).sum().item()
-                    if label not in label_correct:
-                        label_correct[label] = 0
-                        label_all[label] = 0
-                    label_correct[label] += corr
-                    label_all[label] += inds.sum().item()
+                output = output.float()
+                loss = loss.float()
 
-    test_loss /= test_loaders_size
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
 
-    logger.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
-        test_loss, correct, test_loaders_size,
-        100. * correct / test_loaders_size))
+    logger.info('Test set: Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                loss=losses, acc=acc))
 
-    if args.acc_per_class:
-        logger.info('Per class test accuracy:')
-        per_class_acc = ''
-        for label in sorted(label_all.keys()):
-            per_class_acc += '{:4d}: {:4.0f}% '.format(label, 100. * label_correct[label]/label_all[label])
-        logger.info(per_class_acc)
+    # TODO calculate accuracy per class.
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
