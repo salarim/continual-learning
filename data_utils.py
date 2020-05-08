@@ -267,3 +267,24 @@ class TripletDataset(torch.utils.data.Dataset):
                 imgs[i] = self.transform(imgs[i])
 
         return torch.stack((imgs[0], imgs[1], imgs[2])), target
+
+
+
+class ContrastiveDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        org_idx = self.indexes[idx]
+        img, target = self.data[org_idx], int(self.targets[org_idx])
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
+
+        return self.transform(img), self.transform(img), target
