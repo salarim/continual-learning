@@ -10,7 +10,7 @@ import torchvision
 
 class DataLoaderConstructor:
 
-    def __init__(self, args, train, **kwargs):
+    def __init__(self, args, train):
         self.train = train
         original_data, original_targets = self.get_data_targets(args.dataset)
         transforms = self.get_transforms(args.dataset)
@@ -20,7 +20,7 @@ class DataLoaderConstructor:
         indexes = continual_constructor.indexes
         
         self.data_loaders = self.create_dataloaders(args, original_data, original_targets
-                                                    indexes, transforms, **kwargs)
+                                                    indexes, transforms)
 
     def get_data_targets(self, dataset_name):
         if dataset_name == 'mnist':
@@ -74,7 +74,7 @@ class DataLoaderConstructor:
                                                              stds[dataset_name])])
         return torchvision.transforms.Compose(transforms)
 
-    def create_dataloaders(self, args, data, targets, indexes, transforms,**kwargs):
+    def create_dataloaders(self, args, data, targets, indexes, transforms):
         data_loaders = []
 
         batch_size = args.batch_size if self.train else args.test_batch_size
@@ -83,10 +83,13 @@ class DataLoaderConstructor:
                 dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
             elif args.model_type == 'triplet':
                 dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
+
             if args.distributed and self.train:
                 sampler = torch.utils.data.distributed.DistributedSampler(dataset)
             else:
                 sampler = None
+            
+            kwargs = {'num_workers': args.workers, 'pin_memory': True} if args.gpu else {}
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=batch_size, shuffle=False, sampler=sampler, **kwargs)
             data_loaders.append(data_loader)

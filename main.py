@@ -154,15 +154,12 @@ def main_worker(gpu, ngpus_per_node, args):
     #     # DataParallel will divide and allocate batch_size to all available GPUs
     #     model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
 
-
-
-    kwargs = {'num_workers': args.workers, 'pin_memory': True} if args.gpu else {}
-    train_loader_creator = DataLoaderConstructor(args, train=True, **kwargs)
+    train_loader_creator = DataLoaderConstructor(args, train=True)
     if args.model_type == 'contrastive':
-        # train_loader_creator_u = DataLoaderConstructor(args, train=True, **kwargs) # TODO
+        # train_loader_creator_u = DataLoaderConstructor(args, train=True) # TODO
         pass
 
-    test_loader_creator = DataLoaderConstructor(args, train=False, **kwargs)
+    test_loader_creator = DataLoaderConstructor(args, train=False)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
