@@ -18,7 +18,7 @@ class DataLoaderConstructor:
         self.tasks_targets, indexes = \
             self.get_tasks_targets_indexes(args, original_targets, is_continual)
         
-        self.data_loaders = self.create_dataloaders(args, original_data, original_targets
+        self.data_loaders = self.create_dataloaders(args, original_data, original_targets,
                                                     indexes, transforms)
 
     def get_data_targets(self, dataset_name):
@@ -81,8 +81,8 @@ class DataLoaderConstructor:
         else:
             tasks_targets = [list(np.unique(original_targets))] * args.tasks
             indexes = []
-            for i in range(args.tasks)
-            indexes.append(np.random.permutation(original_targets.shape[0]))
+            for i in range(args.tasks):
+                indexes.append(np.random.permutation(original_targets.shape[0]))
         
         return tasks_targets, indexes
 
