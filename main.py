@@ -43,12 +43,14 @@ parser.add_argument('--save-model', action='store_true', default=False,
                     help='For Saving the current Model')
 parser.add_argument("--save", type=str, default="experiments/")
 parser.add_argument('--model-type', type=str, default='softmax',
-                    help='choose softmax or triplet')
+                    help='choose softmax/triplet/contrastive')
 parser.add_argument('--depth', type=int, default=20, metavar='N',
                     help='Model depth')
 
 parser.add_argument('--dataset', type=str, default='mnist',
-                    help='Name of dataset. (mnist/cifar10/cifar100/imagenet)')
+                    help='Name of dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist')
+parser.add_argument('--unlabeled-dataset', type=str, default='mnist',
+                    help='Name of unlabeled dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist)')
 parser.add_argument('--tasks', type=int, default=2, metavar='N',
                 help='number of tasks (default: 2)')
 parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
@@ -156,6 +158,9 @@ def main_worker(gpu, ngpus_per_node, args):
 
     kwargs = {'num_workers': args.workers, 'pin_memory': True} if args.gpu else {}
     train_loader_creator = DataLoaderConstructor(args, train=True, **kwargs)
+    if args.model_type == 'contrastive':
+        # train_loader_creator_u = DataLoaderConstructor(args, train=True, **kwargs) # TODO
+        pass
 
     test_loader_creator = DataLoaderConstructor(args, train=False, **kwargs)
 
