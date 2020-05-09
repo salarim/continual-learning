@@ -27,7 +27,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
     dir_name = args.vis_base_dir + 'T' + str(task_id+1) + '/'
     makedirs(dir_name)
 
-    for t_id, task in enumerate(data_loader_creator.task_targets):
+    for t_id, task in enumerate(data_loader_creator.tasks_targets):
         plt.figure()
         palette = sns.color_palette("bright", len(task))
         idx = np.isin(targets, task)

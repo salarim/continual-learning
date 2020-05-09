@@ -16,7 +16,7 @@ class DataLoaderConstructor:
         transforms = self.get_transforms(args.dataset)
 
         continual_constructor = ContinualIndexConstructor(args, original_targets, train)
-        self.task_targets = continual_constructor.task_targets
+        self.tasks_targets = continual_constructor.tasks_targets
         indexes = continual_constructor.indexes
         
         self.data_loaders = self.create_dataloaders(args, original_data, original_targets
@@ -100,7 +100,7 @@ class DataLoaderConstructor:
 class ContinualIndexConstructor:
 
     def __init__(self, args, targets, train):
-        self.task_targets = self.create_task_targets(np.unique(targets), args.tasks)
+        self.tasks_targets = self.create_tasks_targets(np.unique(targets), args.tasks)
 
         exemplar_size = args.exemplar_size if train else 0
         data_indexes, exemplars_indexes = self.divide_indexes_into_tasks(targets, exemplar_size)
@@ -112,26 +112,26 @@ class ContinualIndexConstructor:
         
         self.indexes = self.combine_data_exemplars(data_indexes, exemplars_indexes)
 
-    def create_task_targets(self, unique_targets, ntasks):
+    def create_tasks_targets(self, unique_targets, ntasks):
         ntargets_per_task = int(len(unique_targets) / ntasks)
         ntargets_first_task = ntargets_per_task + len(unique_targets) % ntasks
-        task_targets = [unique_targets[:ntargets_first_task]]
+        tasks_targets = [unique_targets[:ntargets_first_task]]
 
         target_idx = ntargets_first_task
         for i in range(ntasks-1):
-            task_targets.append(unique_targets[target_idx: target_idx+ntargets_per_task])
+            tasks_targets.append(unique_targets[target_idx: target_idx+ntargets_per_task])
             target_idx += ntargets_per_task
 
-        return task_targets
+        return tasks_targets
 
     def divide_indexes_into_tasks(self, targets, exemplar_size):
         data_indexes = []
         exemplars_indexes = []
 
-        for i, task_targets in enumerate(self.task_target):
+        for i, task_targets in enumerate(self.tasks_targets):
             prev_targets = []
-            for prev_task_targets in self.task_target[:i]:
-                prev_targets.extend(prev_task_targets)
+            for prev_tasks_targets in self.tasks_targets[:i]:
+                prev_targets.extend(prev_tasks_targets)
 
             task_data_indexes = np.empty((0), dtype=np.intc)
             task_exemplars_indexes = np.empty((0), dtype=np.intc)
@@ -154,8 +154,8 @@ class ContinualIndexConstructor:
     def get_os_exemplar_size(self, data_indexes, exemplars_indexes, ratio):
         os_sizes = []
         for i in range(len(exemplars_indexes)):
-            data_target_size = len(self.task_target[i])
-            exemplar_target_size = sum([len(x) for x in self.task_target[:i]])
+            data_target_size = len(self.tasks_targets[i])
+            exemplar_target_size = sum([len(x) for x in self.tasks_targets[:i]])
             data_size = data_indexes[i].shape[0]
 
             size = int(exemplar_target_size * ratio * (data_size / data_target_size))
