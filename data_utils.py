@@ -75,7 +75,7 @@ class DataLoaderConstructor:
 
     def get_tasks_targets_indexes(self, args, original_targets, is_continual):
         if is_continual:
-            continual_constructor = ContinualIndexConstructor(args, original_targets, train)
+            continual_constructor = ContinualIndexConstructor(args, original_targets, self.train)
             tasks_targets = continual_constructor.tasks_targets
             indexes = continual_constructor.indexes
         else:
