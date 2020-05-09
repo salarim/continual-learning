@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+import numpy as np
+
 
 def seprated_softmax_loss(score_mean, target, tasks_targets, task_id):
     curr_targets = tasks_targets[task_id]
@@ -67,12 +69,13 @@ class ContrastiveLoss(torch.nn.Module):
         # l means labeled, u means unlabeled
     def forward(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
         self_sup_representations = torch.cat([zis_l,zis_u,zjs_l,zjs_u], dim=0)
-        self_sup_similarity_matrix = self.cosine_similarity(representations, representations)
+        self_sup_similarity_matrix = self.cosine_similarity(self_sup_representations, 
+                                                            self_sup_representations)
 
         self_sup_loss = self._self_sup_loss(self_sup_similarity_matrix)
 
         sup_similarity_matrix = self_sup_similarity_matrix[:self.batch_size_l, :self.batch_size_l]
-        sup_loss = _sup_loss(sup_similarity_matrix, targets_l)
+        sup_loss = self._sup_loss(sup_similarity_matrix, targets_l)
 
         return self_sup_loss + sup_loss
 
@@ -109,8 +112,9 @@ class ContrastiveLoss(torch.nn.Module):
     def _get_sup_pos_targets(self, targets):
         targets_mat = targets.repeat(targets.shape[0], 1)
         tmp = targets.unsqueeze(dim=1).repeat(1, targets.shape[0])
+        off_diagonal = ~torch.eye(targets.shape[0]).type(torch.bool).to(self.device)
 
-        pos_targets = targets_mat == tmp & ~torch.eye(targets.shape[0]).type(torch.bool)
+        pos_targets = (targets_mat == tmp) & off_diagonal
         pos_targets = pos_targets.type(torch.float32)
 
         pos_targets = self._drop_diagonal(pos_targets)

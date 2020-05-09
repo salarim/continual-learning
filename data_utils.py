@@ -47,7 +47,10 @@ class DataLoaderConstructor:
         if torch.is_tensor(targets):
             data = data.numpy()
             targets = targets.numpy()
-        
+        elif type(targets) == list:
+            data = np.array(data)
+            targets = np.array(targets)
+
         return data, targets
 
     def get_transforms(self, dataset_name):
@@ -105,7 +108,8 @@ class DataLoaderConstructor:
             
             kwargs = {'num_workers': args.workers, 'pin_memory': True} if args.gpu else {}
             data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, shuffle=False, sampler=sampler, **kwargs)
+                dataset, batch_size=batch_size, shuffle=False,
+                sampler=sampler, drop_last=True, **kwargs)
             data_loaders.append(data_loader)
 
         return data_loaders

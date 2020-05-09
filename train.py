@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
@@ -7,9 +8,10 @@ from test import test, accuracy
 from log_utils import AverageMeter
 # from visualize import plot_embedding_tsne
 
-def train(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
+def train(args, model, device, train_loader_creator, test_loader_creator, logger):   
 
     criterion = torch.nn.CrossEntropyLoss().to(device)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
 

@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
@@ -7,8 +8,10 @@ from test import test
 from optim import triplet_loss
 # from visualize import plot_embedding_tsne
 
-def train_triplet(args, model, device, train_loader_creator, test_loader_creator, optimizer, logger):   
+def train_triplet(args, model, device, train_loader_creator, test_loader_creator, logger):   
     model.train()
+
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
 

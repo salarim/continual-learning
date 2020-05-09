@@ -5,7 +5,6 @@ from time import localtime, strftime
 import warnings
 
 import torch
-import torch.optim as optim
 
 import torch.nn.parallel
 import torch.multiprocessing as mp
@@ -167,7 +166,6 @@ def main_worker(gpu, ngpus_per_node, args):
                                                 dataset=args.dataset, is_continual=True)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
     if args.save_model:
         torch.save(model.state_dict(), "initial.pt")
@@ -175,14 +173,14 @@ def main_worker(gpu, ngpus_per_node, args):
     args.vis_base_dir = 'plots/' + log_file + '/'
     if args.model_type == 'softmax':
         train(args, model, device, train_loader_creator,
-              test_loader_creator, optimizer, logger)
+              test_loader_creator, logger)
         test(args, model, device, test_loader_creator, logger)
     elif args.model_type == 'triplet':
         train_triplet(args, model, device, train_loader_creator,
-                      test_loader_creator, optimizer, logger)
-    elif args.model_type == 'triplet':
+                      test_loader_creator, logger)
+    elif args.model_type == 'contrastive':
         train_contrastive(args, model, device, train_loader_creator,
-                          train_loader_creator_u, optimizer, logger)
+                          train_loader_creator_u, logger)
 
 
 

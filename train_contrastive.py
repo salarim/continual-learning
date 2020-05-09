@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
@@ -8,9 +9,10 @@ from models.contrastive_wrapper import ProjectiveWrapper
 from optim import ContrastiveLoss
 # from visualize import plot_embedding_tsne
 
-def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, optimizer, logger):   
-    proj_model = ProjectiveWrapper(model, output_dim=64) # TODO
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size_u, 0.07) # TODO
+def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, logger):   
+    proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07) # TODO
+    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
 
     train_loaders_l = train_loader_creator_l.data_loaders
     train_loaders_u = train_loader_creator_u.data_loaders
@@ -40,12 +42,12 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 loss.backward()                
                 optimizer.step()
 
-                losses.update(loss.item(), data.size(0))
+                losses.update(loss.item(), data_l_1.size(0))
 
                 if batch_idx % args.log_interval == 0:
                     logger.info('Train Task: {0} Epoch: [{1}][{2}/{3}]\t'
                         'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
-                            task_idx+1, epoch, batch_idx, len(train_loader),
+                            task_idx+1, epoch, batch_idx, len(train_loader_l),
                             loss=losses))
 
             scheduler.step()
