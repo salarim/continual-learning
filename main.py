@@ -16,6 +16,7 @@ from model import get_model
 from data_utils import DataLoaderConstructor
 from train import train
 from train_triplet import train_triplet
+from train_contrastive import train_contrastive
 from test import test
 from log_utils import makedirs, get_logger
 
@@ -154,12 +155,16 @@ def main_worker(gpu, ngpus_per_node, args):
     #     # DataParallel will divide and allocate batch_size to all available GPUs
     #     model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
 
-    train_loader_creator = DataLoaderConstructor(args, train=True)
+    # args, dataset, train, is_continual
+    train_loader_creator = DataLoaderConstructor(args, train=True,
+                                                 dataset=args.dataset, is_continual=True)
     if args.model_type == 'contrastive':
-        # train_loader_creator_u = DataLoaderConstructor(args, train=True) # TODO
-        pass
+        train_loader_creator_u = DataLoaderConstructor(args, train=True, 
+                                                       dataset=args.unlabeled_dataset, 
+                                                       is_continual=False)
 
-    test_loader_creator = DataLoaderConstructor(args, train=False)
+    test_loader_creator = DataLoaderConstructor(args, train=False, 
+                                                dataset=args.dataset, is_continual=True)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
@@ -170,11 +175,14 @@ def main_worker(gpu, ngpus_per_node, args):
     args.vis_base_dir = 'plots/' + log_file + '/'
     if args.model_type == 'softmax':
         train(args, model, device, train_loader_creator,
-         test_loader_creator, optimizer, logger)
+              test_loader_creator, optimizer, logger)
         test(args, model, device, test_loader_creator, logger)
     elif args.model_type == 'triplet':
         train_triplet(args, model, device, train_loader_creator,
-         test_loader_creator, optimizer, logger)
+                      test_loader_creator, optimizer, logger)
+    elif args.model_type == 'triplet':
+        train_contrastive(args, model, device, train_loader_creator,
+                          train_loader_creator_u, optimizer, logger)
 
 
 

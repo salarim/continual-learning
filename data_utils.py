@@ -10,14 +10,13 @@ import torchvision
 
 class DataLoaderConstructor:
 
-    def __init__(self, args, train):
+    def __init__(self, args, dataset, train, is_continual):
         self.train = train
-        original_data, original_targets = self.get_data_targets(args.dataset)
-        transforms = self.get_transforms(args.dataset)
+        original_data, original_targets = self.get_data_targets(dataset)
+        transforms = self.get_transforms(dataset)
 
-        continual_constructor = ContinualIndexConstructor(args, original_targets, train)
-        self.tasks_targets = continual_constructor.tasks_targets
-        indexes = continual_constructor.indexes
+        self.tasks_targets, indexes = \
+            self.get_tasks_targets_indexes(args, original_targets, is_continual)
         
         self.data_loaders = self.create_dataloaders(args, original_data, original_targets
                                                     indexes, transforms)
@@ -74,6 +73,19 @@ class DataLoaderConstructor:
                                                              stds[dataset_name])])
         return torchvision.transforms.Compose(transforms)
 
+    def get_tasks_targets_indexes(self, args, original_targets, is_continual):
+        if is_continual:
+            continual_constructor = ContinualIndexConstructor(args, original_targets, train)
+            tasks_targets = continual_constructor.tasks_targets
+            indexes = continual_constructor.indexes
+        else:
+            tasks_targets = [list(np.unique(original_targets))] * args.tasks
+            indexes = []
+            for i in range(args.tasks)
+            indexes.append(np.random.permutation(original_targets.shape[0]))
+        
+        return tasks_targets, indexes
+
     def create_dataloaders(self, args, data, targets, indexes, transforms):
         data_loaders = []
 
@@ -83,6 +95,8 @@ class DataLoaderConstructor:
                 dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
             elif args.model_type == 'triplet':
                 dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
+            elif args.model_type == 'contrastive':
+                dataset = ContrastiveDataset(data, targets, task_indexes, transform=transforms)
 
             if args.distributed and self.train:
                 sampler = torch.utils.data.distributed.DistributedSampler(dataset)
