@@ -2,11 +2,11 @@ import torch
 import torch.nn.functional as F
 
 
-def seprated_softmax_loss(score_mean, target, task_target_set, task_id):
-    curr_targets = task_target_set[task_id]
+def seprated_softmax_loss(score_mean, target, task_targets, task_id):
+    curr_targets = task_targets[task_id]
     prev_targets = []
     for i in range(task_id):
-        prev_targets.extend(task_target_set[i])
+        prev_targets.extend(task_targets[i])
     
     curr_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)
     prev_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)

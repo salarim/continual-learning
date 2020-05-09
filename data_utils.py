@@ -15,10 +15,12 @@ class DataLoaderConstructor:
         original_data, original_targets = self.get_data_targets(args.dataset)
         transforms = self.get_transforms(args.dataset)
 
-        self.continual_constructor = ContinualIndexConstructor(args, original_targets, train)
+        continual_constructor = ContinualIndexConstructor(args, original_targets, train)
+        self.task_targets = continual_constructor.task_targets
+        indexes = continual_constructor.indexes
         
-        self.data_loaders = self.create_dataloaders(args, original_data,
-                                                    original_targets, transforms, **kwargs)
+        self.data_loaders = self.create_dataloaders(args, original_data, original_targets
+                                                    indexes, transforms, **kwargs)
 
     def get_data_targets(self, dataset_name):
         if dataset_name == 'mnist':
@@ -72,11 +74,11 @@ class DataLoaderConstructor:
                                                              stds[dataset_name])])
         return torchvision.transforms.Compose(transforms)
 
-    def create_dataloaders(self, args, data, targets, transforms,**kwargs):
+    def create_dataloaders(self, args, data, targets, indexes, transforms,**kwargs):
         data_loaders = []
 
         batch_size = args.batch_size if self.train else args.test_batch_size
-        for task_indexes in self.continual_constructor.indexes:
+        for task_indexes in indexes:
             if args.model_type == 'softmax':
                 dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
             elif args.model_type == 'triplet':
@@ -95,7 +97,7 @@ class DataLoaderConstructor:
 class ContinualIndexConstructor:
 
     def __init__(self, args, targets, train):
-        self.task_targets_set = self.create_task_targets_set(np.unique(targets), args.tasks)
+        self.task_targets = self.create_task_targets(np.unique(targets), args.tasks)
 
         exemplar_size = args.exemplar_size if train else 0
         data_indexes, exemplars_indexes = self.divide_indexes_into_tasks(targets, exemplar_size)
@@ -107,26 +109,26 @@ class ContinualIndexConstructor:
         
         self.indexes = self.combine_data_exemplars(data_indexes, exemplars_indexes)
 
-    def create_task_targets_set(self, unique_targets, ntasks):
+    def create_task_targets(self, unique_targets, ntasks):
         ntargets_per_task = int(len(unique_targets) / ntasks)
         ntargets_first_task = ntargets_per_task + len(unique_targets) % ntasks
-        task_targets_set = [unique_targets[:ntargets_first_task]]
+        task_targets = [unique_targets[:ntargets_first_task]]
 
         target_idx = ntargets_first_task
         for i in range(ntasks-1):
-            task_targets_set.append(unique_targets[target_idx: target_idx+ntargets_per_task])
+            task_targets.append(unique_targets[target_idx: target_idx+ntargets_per_task])
             target_idx += ntargets_per_task
 
-        return task_targets_set
+        return task_targets
 
     def divide_indexes_into_tasks(self, targets, exemplar_size):
         data_indexes = []
         exemplars_indexes = []
 
-        for i, task_targets in enumerate(self.task_targets_set):
-            prev_targets_set = []
-            for prev_targets in self.task_targets_set[:i]:
-                prev_targets_set.extend(prev_targets)
+        for i, task_targets in enumerate(self.task_target):
+            prev_targets = []
+            for prev_task_targets in self.task_target[:i]:
+                prev_targets.extend(prev_task_targets)
 
             task_data_indexes = np.empty((0), dtype=np.intc)
             task_exemplars_indexes = np.empty((0), dtype=np.intc)
@@ -134,8 +136,8 @@ class ContinualIndexConstructor:
             for target in task_targets:
                 task_data_indexes = np.append(task_data_indexes, np.where(targets == target)[0])
 
-            for target in prev_targets_set:
-                size = int(exemplar_size/len(prev_targets_set))
+            for target in prev_targets:
+                size = int(exemplar_size/len(prev_targets))
                 prev_all_indexes = np.where(targets == target)[0]
                 idx = np.random.randint(prev_all_indexes.shape[0], size=size)
                 target_exemplars_indexes = prev_all_indexes[idx]
@@ -149,8 +151,8 @@ class ContinualIndexConstructor:
     def get_os_exemplar_size(self, data_indexes, exemplars_indexes, ratio):
         os_sizes = []
         for i in range(len(exemplars_indexes)):
-            data_target_size = len(self.task_targets_set[i])
-            exemplar_target_size = sum([len(x) for x in self.task_targets_set[:i]])
+            data_target_size = len(self.task_target[i])
+            exemplar_target_size = sum([len(x) for x in self.task_target[:i]])
             data_size = data_indexes[i].shape[0]
 
             size = int(exemplar_target_size * ratio * (data_size / data_target_size))
