@@ -96,7 +96,7 @@ class ContrastiveLoss(torch.nn.Module):
         labels = torch.zeros(2 * self.batch_size).to(self.device).long()
         loss = self.self_sup_criterion(logits, labels)
 
-        return loss
+        return loss / (2 * self.batch_size)
 
     def _sup_loss(self, similarity_matrix, targets):
         logits = similarity_matrix / self.temperature
@@ -107,7 +107,7 @@ class ContrastiveLoss(torch.nn.Module):
 
         loss = cross_ent.sum()
 
-        return loss
+        return loss / self.batch_size_l
 
     def _get_sup_pos_targets(self, targets):
         targets_mat = targets.repeat(targets.shape[0], 1)
