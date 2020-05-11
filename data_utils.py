@@ -10,7 +10,7 @@ import torchvision
 
 class DataConfig:
 
-    def __init(self, args, train, dataset, dataset_type, is_continual, batch_size, distributed=None,
+    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, distributed=None,
                gpu=None, workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
         
         self.train = train
@@ -19,12 +19,12 @@ class DataConfig:
         self.is_continual = is_continual
         self.batch_size = batch_size
 
-        self.distributed = args.distributed if args.distributed else distributed
-        self.gpu = args.gpu if args.gpu else gpu
-        self.workers = args.workers if args.workers else workers
-        self.tasks = args.tasks if args.tasks else tasks
-        self.exemplar_size = args.exemplar_size if args.exemplar_size else exemplar_size
-        self.oversample_ratio = args.oversample_ratio if args.oversample_ratio else oversample_ratio
+        self.distributed = distributed if distributed else args.distributed
+        self.gpu = gpu if gpu else args.gpu
+        self.workers = workers if workers else args.workers
+        self.tasks = tasks if tasks else args.tasks
+        self.exemplar_size = exemplar_size if exemplar_size else args.exemplar_size
+        self.oversample_ratio = oversample_ratio if oversample_ratio else args.oversample_ratio
 
 
 class DataLoaderConstructor:
