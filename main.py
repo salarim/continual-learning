@@ -12,7 +12,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from model import get_model
-from data_utils import DataLoaderConstructor
+from data_utils import DataConfig, DataLoaderConstructor
 from train import train
 from train_triplet import train_triplet
 from train_contrastive import train_contrastive
@@ -154,16 +154,22 @@ def main_worker(gpu, ngpus_per_node, args):
     #     # DataParallel will divide and allocate batch_size to all available GPUs
     #     model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
 
-    # args, dataset, train, is_continual
-    train_loader_creator = DataLoaderConstructor(args, train=True,
-                                                 dataset=args.dataset, is_continual=True)
-    if args.model_type == 'contrastive':
-        train_loader_creator_u = DataLoaderConstructor(args, train=True, 
-                                                       dataset=args.unlabeled_dataset, 
-                                                       is_continual=False)
 
-    test_loader_creator = DataLoaderConstructor(args, train=False, 
-                                                dataset=args.dataset, is_continual=True)
+    train_loader_creator_config = DataConfig(args, train=True, dataset=args.dataset,
+                                             dataset_type=args.model_type, is_continual=True, 
+                                             batch_size=args.batch_size)
+    train_loader_creator = DataLoaderConstructor(train_loader_creator_config)
+
+    if args.model_type == 'contrastive':
+        train_loader_creator_u_config = DataConfig(args, train=True, dataset=args.unlabeled_dataset,
+                                                   dataset_type=args.model_type, is_continual=False, 
+                                                   batch_size=args.batch_size)
+        train_loader_creator_u = DataLoaderConstructor(train_loader_creator_u_config)
+
+    test_loader_creator_config = DataConfig(args, train=False, dataset=args.dataset,
+                                            dataset_type=args.model_type, is_continual=True, 
+                                            batch_size=args.test_batch_size, exemplar_size=0)
+    test_loader_creator = DataLoaderConstructor(test_loader_creator_config)
 
     device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
 
