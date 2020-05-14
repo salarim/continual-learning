@@ -44,8 +44,6 @@ parser.add_argument('--save-model', action='store_true', default=False,
 parser.add_argument("--save", type=str, default="experiments/")
 parser.add_argument('--model-type', type=str, default='softmax',
                     help='choose softmax/triplet/contrastive')
-parser.add_argument('--depth', type=int, default=20, metavar='N',
-                    help='Model depth')
 
 parser.add_argument('--dataset', type=str, default='mnist',
                     help='Name of dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist')

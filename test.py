@@ -30,7 +30,7 @@ def test(args, model, device, test_loader_creator, logger):
                 acc.update(it_acc.item(), data.size(0))
 
     logger.info('Test set: Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                'Acc {acc.avg:.3f}'.format(
                 loss=losses, acc=acc))
 
     # TODO calculate accuracy per class.
