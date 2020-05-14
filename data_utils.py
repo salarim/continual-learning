@@ -129,8 +129,8 @@ class DataLoaderConstructor:
             else:
                 sampler = None
             
-            kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if self.config.gpu \
-                 else {}
+            kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
+                self.config.gpu is not None else {}
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=self.config.batch_size, shuffle=False,
                 sampler=sampler, drop_last=True, **kwargs)
