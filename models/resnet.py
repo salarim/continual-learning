@@ -11,6 +11,9 @@
 import torch
 import torch.nn as nn
 
+from .utils import MultiHeadLinear
+
+
 class BasicBlock(nn.Module):
     """Basic Block for resnet 18 and resnet 34
 
