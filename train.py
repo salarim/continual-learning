@@ -1,8 +1,10 @@
+import time
+from termcolor import cprint
+
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiStepLR
-from termcolor import cprint
 
 from test import test, accuracy
 from log_utils import AverageMeter
@@ -24,8 +26,12 @@ def train(args, model, device, train_loader_creator, test_loader_creator, logger
             model.train()
             losses = AverageMeter()
             acc = AverageMeter()
+            batch_time = AverageMeter()
+            data_time = AverageMeter()
 
+            end = time.time()
             for batch_idx, (data, target) in enumerate(train_loader):
+                data_time.update(time.time() - end)
 
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
@@ -41,12 +47,17 @@ def train(args, model, device, train_loader_creator, test_loader_creator, logger
                 losses.update(loss.item(), data.size(0))
                 acc.update(it_acc.item(), data.size(0))
 
+                batch_time.update(time.time() - end)
+                end = time.time()
+
                 if batch_idx % args.log_interval == 0:
-                    logger.info('Train Task: {0} Epoch: [{1}][{2}/{3}]\t'
+                    logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
+                        'DTime {data_time.avg:.3f}\t'
+                        'BTime {batch_time.avg:.3f}\t'
                         'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                         'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
                             task_idx+1, epoch, batch_idx, len(train_loader),
-                            loss=losses, acc=acc))
+                            batch_time=batch_time, data_time=data_time, loss=losses, acc=acc))
 
             scheduler.step()
             if epoch % args.test_interval == 0:
