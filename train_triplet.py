@@ -11,13 +11,14 @@ from optim import triplet_loss
 def train_triplet(args, model, device, train_loader_creator, test_loader_creator, logger):   
     model.train()
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
 
     for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = args.lr
-        scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
             for batch_idx, (data, target) in enumerate(train_loader):

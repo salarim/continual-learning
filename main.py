@@ -28,8 +28,11 @@ parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 100)')
 parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
                     help='learning rate (default: 0.1)')
-parser.add_argument('--gamma', type=float, default=0.1, metavar='M',
-                    help='Learning rate step gamma (default: 0.1)')
+parser.add_argument('--gamma', type=float, default=0.2, metavar='M',
+                    help='Learning rate step gamma (default: 0.2)')
+parser.add_argument('--milestones', type=int, default=[60, 120, 160], nargs='+')
+parser.add_argument('--weight-decay', type=float, default=5e-4,
+                    help='Optimizer weight dacay (default: 5e-4)')
 parser.add_argument('--seed', default=None, type=int,
                 help='seed for initializing training. ')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',

@@ -12,7 +12,8 @@ from optim import ContrastiveLoss
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, logger):   
     proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
     criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07) # TODO
-    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
 
     train_loaders_l = train_loader_creator_l.data_loaders
     train_loaders_u = train_loader_creator_u.data_loaders
@@ -20,7 +21,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = args.lr
-        scheduler = MultiStepLR(optimizer, milestones=[100, 150], gamma=args.gamma)
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
 
         for epoch in range(1,args.epochs+1):
             
