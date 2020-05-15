@@ -131,4 +131,4 @@ class ContrastiveLoss(torch.nn.Module):
         logsoftmax[~target.type(torch.bool)] = 0.0
         logsoftmax = logsoftmax.sum(dim=1)
         weights = target.sum(dim=1)
-        return logsoftmax / weights
+        return logsoftmax / (weights + 1e-8)
