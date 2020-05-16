@@ -4,14 +4,13 @@ import numpy as np
 from PIL import Image
 
 import torch
-import torch.utils.data.distributed
 import torchvision
 
 
 class DataConfig:
 
-    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, distributed=None,
-               gpu=None, workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
+    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, 
+                 workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
         
         self.train = train
         self.dataset = dataset
@@ -19,8 +18,6 @@ class DataConfig:
         self.is_continual = is_continual
         self.batch_size = batch_size
 
-        self.distributed = distributed if distributed else args.distributed
-        self.gpu = gpu if gpu else args.gpu
         self.workers = workers if workers else args.workers
         self.tasks = tasks if tasks else args.tasks
         self.exemplar_size = exemplar_size if exemplar_size else args.exemplar_size
@@ -123,17 +120,12 @@ class DataLoaderConstructor:
                 dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
             elif self.config.dataset_type == 'contrastive':
                 dataset = ContrastiveDataset(data, targets, task_indexes, transform=transforms)
-
-            if self.config.distributed and self.config.train:
-                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-            else:
-                sampler = None
             
             kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
-                self.config.gpu is not None else {}
+                torch.cuda.device_count() > 0 else {}
             data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=self.config.batch_size, shuffle=False,
-                sampler=sampler, drop_last=True, **kwargs)
+                drop_last=True, **kwargs)
             data_loaders.append(data_loader)
 
         return data_loaders

@@ -5,10 +5,6 @@ from time import localtime, strftime
 import warnings
 
 import torch
-
-import torch.nn.parallel
-import torch.multiprocessing as mp
-import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 
 from model import get_model
@@ -64,25 +60,24 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                 help='number of data loading workers (default: 4)')
 parser.add_argument('--gpu', default=None, type=int,
                 help='GPU id to use.')
-parser.add_argument('--dist-url', default='tcp://127.0.0.1:23456', type=str,
-                help='url used to set up distributed training')
-parser.add_argument('--dist-backend', default='nccl', type=str,
-                help='distributed backend')
-parser.add_argument('--world-size', default=-1, type=int,
-                help='number of nodes for distributed training')
-parser.add_argument('--rank', default=-1, type=int,
-                help='node rank for distributed training')
-parser.add_argument('--multiprocessing-distributed', action='store_true',
-                help='Use multi-processing distributed training to launch '
-                        'N processes per node, which has N GPUs. This is the '
-                        'fastest way to use PyTorch for either single node or '
-                        'multi node data parallel training')
 
 
 def main():
     args = parser.parse_args()
 
     makedirs(args.save)
+
+    log_file = args.model_type + '-' + str(args.tasks) + '-'
+    if args.oversample_ratio > 0.0:
+        log_file += 'OS-'
+    log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
+    python_files = [os.path.abspath(f) for f in os.listdir('.') \
+        if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
+    logger = get_logger(logpath=os.path.join(args.save, log_file),
+     filepath=os.path.abspath(__file__),
+     package_files=python_files)
+
+    logger.info(args)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -94,66 +89,20 @@ def main():
                       'You may see unexpected behavior when restarting '
                       'from checkpoints.')
 
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
-
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
-
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
-    ngpus_per_node = torch.cuda.device_count()
-    if args.multiprocessing_distributed:
-        args.world_size = ngpus_per_node * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    else:
-        main_worker(args.gpu, ngpus_per_node, args)
-
-
-def main_worker(gpu, ngpus_per_node, args):
-    log_file = args.model_type + '-' + str(args.tasks) + '-'
-    if args.oversample_ratio > 0.0:
-        log_file += 'OS-'
-    log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
-    log_file += str(gpu)
-    python_files = [os.path.abspath(f) for f in os.listdir('.') \
-        if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
-    logger = get_logger(logpath=os.path.join(args.save, log_file),
-     filepath=os.path.abspath(__file__),
-     package_files=python_files)
-    logger.info(args)
-
-    args.gpu = gpu
-    if args.gpu is not None:
-        logger.info("Use GPU: {} for training".format(args.gpu))
-
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
-
     model = get_model(args)
-    if args.distributed:
-        if args.gpu is not None:
-            torch.cuda.set_device(args.gpu)
-            model.cuda(args.gpu)
-            args.batch_size = int(args.batch_size / ngpus_per_node)
-            args.test_batch_size = int(args.test_batch_size / ngpus_per_node)
-            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        else:
-            model.cuda()
-            model = torch.nn.parallel.DistributedDataParallel(model)
-    elif args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-    # else:
-    #     # DataParallel will divide and allocate batch_size to all available GPUs
-    #     model = torch.nn.DataParallel(model).cuda() #TODO I'm not sure about it. just copied.
+
+    device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
+    if args.gpu is not None:
+        logger.info("Use GPU {} for training".format(args.gpu))
+        model = model.cuda()
+        device = torch.device("cuda:{}".format(args.gpu))
+    elif torch.cuda.device_count() > 0:
+        logger.info("Use {} GPU/GPUs for training".format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model).cuda()
+        device = torch.device("cuda")
+    else:
+        logger.info("Use CPU for training")
+        device = torch.device("cpu")
 
 
     train_loader_creator_config = DataConfig(args, train=True, dataset=args.dataset,
@@ -171,8 +120,6 @@ def main_worker(gpu, ngpus_per_node, args):
                                             dataset_type=args.model_type, is_continual=True, 
                                             batch_size=args.test_batch_size, exemplar_size=0)
     test_loader_creator = DataLoaderConstructor(test_loader_creator_config)
-
-    device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
 
     if args.save_model:
         torch.save(model.state_dict(), "initial.pt")
