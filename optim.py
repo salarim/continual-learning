@@ -68,6 +68,7 @@ class ContrastiveLoss(torch.nn.Module):
 
         # l means labeled, u means unlabeled
     def forward(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        self._update_batch_size(zis_l, zjs_l, zis_u, zjs_u, targets_l)
         self_sup_representations = torch.cat([zis_l,zis_u,zjs_l,zjs_u], dim=0)
         self_sup_similarity_matrix = self.cosine_similarity(self_sup_representations, 
                                                             self_sup_representations)
@@ -78,6 +79,17 @@ class ContrastiveLoss(torch.nn.Module):
         sup_loss = self._sup_loss(sup_similarity_matrix, targets_l)
 
         return self_sup_loss + sup_loss
+
+    def _update_batch_size(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        assert zis_l.shape[0] == zjs_l.shape[0]
+        assert zis_u.shape[0] == zjs_u.shape[0]
+        assert zis_l.shape[0] == targets_l.shape[0]
+
+        if self.batch_size_l != zis_l.shape[0] or self.batch_size_u != zjs_u.shape[0]:
+            self.batch_size_l = zis_l.shape[0]
+            self.batch_size_u = zjs_u.shape[0]
+            self.batch_size = self.batch_size_l + self.batch_size_u
+            self.self_sup_negative_mask = self._get_self_sup_negative_mask()
 
     def cosine_similarity(self, x, y):
         v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))

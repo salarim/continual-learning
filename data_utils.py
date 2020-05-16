@@ -124,8 +124,7 @@ class DataLoaderConstructor:
             kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
                 torch.cuda.device_count() > 0 else {}
             data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=self.config.batch_size, shuffle=False,
-                drop_last=True, **kwargs)
+                dataset, batch_size=self.config.batch_size, shuffle=False, **kwargs)
             data_loaders.append(data_loader)
 
         return data_loaders
