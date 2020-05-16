@@ -53,7 +53,7 @@ class NearestPrototype:
             weights = (((self.prev_task_feats - target_prev_mean)**2).sum(dim=1).sqrt() \
                 / (-2*self.sigma)).exp() + 1e-8
             drifts = self.cur_task_feats - self.prev_task_feats
-            target_estimated_drift = (drifts * weights.unsqueeze(1)).mean(dim=0) / weights.sum()
+            target_estimated_drift = (drifts * weights.unsqueeze(1)).sum(dim=0) / weights.sum()
             target_estimated_mean = target_prev_mean + target_estimated_drift
             self.task_class_prototypes[task_id][target] = (target_estimated_mean, target_prev_num)
 
