@@ -10,10 +10,10 @@ def test(args, model, device, test_loader_creator, logger):
     criterion = torch.nn.CrossEntropyLoss().to(device)
 
     with torch.no_grad():
+        losses = AverageMeter()
+        acc = AverageMeter()
+        
         for test_loader in test_loader_creator.data_loaders:
-
-            losses = AverageMeter()
-            acc = AverageMeter()
 
             for data, target in test_loader:
 

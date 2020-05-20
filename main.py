@@ -135,7 +135,7 @@ def main():
                       test_loader_creator, logger)
     elif args.model_type == 'contrastive':
         train_contrastive(args, model, device, train_loader_creator,
-                          train_loader_creator_u, logger)
+                          train_loader_creator_u, test_loader_creator, logger)
 
 
 
