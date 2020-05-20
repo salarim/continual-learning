@@ -28,7 +28,7 @@ class NearestPrototype:
         if self.cur_task_feats is not None and self.prev_task_feats is not None:
            self._update_prototypes(last_task)
 
-        class_targets = torch.zeros(len(self.task_class_prototypes[last_task])).\
+        class_targets = torch.zeros(len(self.task_class_prototypes[last_task]), dtype=torch.int64).\
             to(feats.device)
         class_prototypes = None
         for i, (target, (feat, _)) in enumerate(self.task_class_prototypes[last_task].items()):
