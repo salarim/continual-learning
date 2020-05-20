@@ -12,10 +12,16 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
     targets = np.empty((0))
     with torch.no_grad():
         for data_loader in data_loader_creator.data_loaders:
-            for data, target in data_loader:
-                data = data.to(device)
-                if args.model_type == 'triplet':
+            for data_target in data_loader:
+                if data_loader_creator.config.dataset_type in ['softmax', 'triplet']:
+                    data, target = data_target
+                elif data_loader_creator.config.dataset_type == 'contrastive':
+                    data, _, target = data_target
+
+                if data_loader_creator.config.dataset_type == 'triplet':
                     data = data[:,0]
+                    
+                data = data.to(device)
                 embedding = model.get_embedding(data)
                 embedding = embedding.cpu().detach().numpy()
                 target = target.cpu().detach().numpy()
