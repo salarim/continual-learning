@@ -1,0 +1,1323 @@
+Using base prefix '/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/python/3.7.4'
+New python executable in /localscratch/msalari.42732997.0/continual-learning/venv/bin/python
+Installing setuptools, pip, wheel...
+done.
+Ignoring pip: markers 'python_version < "3"' don't match your environment
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Requirement already up-to-date: pip in ./venv/lib/python3.7/site-packages (19.1.1)
+Ignoring pip: markers 'python_version < "3"' don't match your environment
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Collecting cycler==0.10.0 (from -r requirements.txt (line 1))
+Collecting future==0.17.1 (from -r requirements.txt (line 2))
+Collecting h5py==2.10.0 (from -r requirements.txt (line 3))
+Collecting kiwisolver==1.1.0 (from -r requirements.txt (line 4))
+Collecting matplotlib==3.2.1 (from -r requirements.txt (line 5))
+Collecting numpy==1.18.1 (from -r requirements.txt (line 6))
+Collecting pandas==1.0.3 (from -r requirements.txt (line 7))
+Collecting Pillow==7.0.0 (from -r requirements.txt (line 8))
+Collecting Pillow-SIMD==7.0.0.post3 (from -r requirements.txt (line 9))
+Collecting pyparsing==2.4.7 (from -r requirements.txt (line 10))
+Collecting python-dateutil==2.8.1 (from -r requirements.txt (line 11))
+Collecting pytz==2019.3 (from -r requirements.txt (line 12))
+Collecting scipy==1.4.1 (from -r requirements.txt (line 13))
+Collecting seaborn==0.10.0 (from -r requirements.txt (line 14))
+Collecting six==1.14.0 (from -r requirements.txt (line 15))
+Collecting termcolor==1.1.0 (from -r requirements.txt (line 16))
+Collecting torch==1.5.0 (from -r requirements.txt (line 17))
+Collecting torchvision==0.6.0 (from -r requirements.txt (line 18))
+Requirement already satisfied: setuptools in ./venv/lib/python3.7/site-packages (from kiwisolver==1.1.0->-r requirements.txt (line 4)) (41.0.1)
+Installing collected packages: six, cycler, future, numpy, h5py, kiwisolver, pyparsing, python-dateutil, matplotlib, pytz, pandas, Pillow, Pillow-SIMD, scipy, seaborn, termcolor, torch, torchvision
+Successfully installed Pillow-7.0.0 Pillow-SIMD-7.0.0.post3 cycler-0.10.0 future-0.17.1 h5py-2.10.0 kiwisolver-1.1.0 matplotlib-3.2.1 numpy-1.18.1 pandas-1.0.3 pyparsing-2.4.7 python-dateutil-2.8.1 pytz-2019.3 scipy-1.4.1 seaborn-0.10.0 six-1.14.0 termcolor-1.1.0 torch-1.5.0 torchvision-0.6.0
+/localscratch/msalari.42732997.0/continual-learning/main.py
+from __future__ import print_function
+import argparse
+import os
+import random
+from time import localtime, strftime
+import warnings
+
+import torch
+import torch.backends.cudnn as cudnn
+
+from model import get_model
+from data_utils import DataConfig, DataLoaderConstructor
+from train import train
+from train_triplet import train_triplet
+from train_contrastive import train_contrastive
+from test import test
+from log_utils import makedirs, get_logger
+
+parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 128)')
+parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for testing (default: 128)')
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
+                    help='number of epochs to train (default: 100)')
+parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                    help='learning rate (default: 0.1)')
+parser.add_argument('--gamma', type=float, default=0.2, metavar='M',
+                    help='Learning rate step gamma (default: 0.2)')
+parser.add_argument('--milestones', type=int, default=[60, 120, 160], nargs='+')
+parser.add_argument('--weight-decay', type=float, default=5e-4,
+                    help='Optimizer weight dacay (default: 5e-4)')
+parser.add_argument('--seed', default=None, type=int,
+                help='seed for initializing training. ')
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before logging training status')
+parser.add_argument('--test-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before testing model')
+parser.add_argument('--acc-per-class', action='store_true', default=False,
+                    help='log accuracy of model per class')
+
+parser.add_argument('--save-model', action='store_true', default=False,
+                    help='For Saving the current Model')
+parser.add_argument("--save", type=str, default="experiments/")
+parser.add_argument('--model-type', type=str, default='softmax',
+                    help='choose softmax/triplet/contrastive')
+
+parser.add_argument('--dataset', type=str, default='mnist',
+                    help='Name of dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist')
+parser.add_argument('--unlabeled-dataset', type=str, default='mnist',
+                    help='Name of unlabeled dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist)')
+parser.add_argument('--tasks', type=int, default=2, metavar='N',
+                help='number of tasks (default: 2)')
+parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
+                help='number of exemplars (default: 0)')
+parser.add_argument('--oversample-ratio', type=float, default=0.0, metavar='M',
+                help='oversampling ratio (default: 0.0')
+
+# device arguments
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                help='number of data loading workers (default: 4)')
+parser.add_argument('--gpu', default=None, type=int,
+                help='GPU id to use.')
+
+
+def main():
+    args = parser.parse_args()
+
+    makedirs(args.save)
+
+    log_file = args.model_type + '-' + str(args.tasks) + '-'
+    if args.oversample_ratio > 0.0:
+        log_file += 'OS-'
+    log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
+    python_files = [os.path.abspath(f) for f in os.listdir('.') \
+        if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
+    logger = get_logger(logpath=os.path.join(args.save, log_file),
+     filepath=os.path.abspath(__file__),
+     package_files=python_files)
+
+    logger.info(args)
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        cudnn.deterministic = True
+        warnings.warn('You have chosen to seed training. '
+                      'This will turn on the CUDNN deterministic setting, '
+                      'which can slow down your training considerably! '
+                      'You may see unexpected behavior when restarting '
+                      'from checkpoints.')
+
+    model = get_model(args)
+
+    device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
+    if args.gpu is not None:
+        logger.info("Use GPU {} for training".format(args.gpu))
+        model = model.cuda()
+        device = torch.device("cuda:{}".format(args.gpu))
+    elif torch.cuda.device_count() > 0:
+        logger.info("Use {} GPU/GPUs for training".format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model).cuda()
+        device = torch.device("cuda")
+    else:
+        logger.info("Use CPU for training")
+        device = torch.device("cpu")
+
+
+    train_loader_creator_config = DataConfig(args, train=True, dataset=args.dataset,
+                                             dataset_type=args.model_type, is_continual=True, 
+                                             batch_size=args.batch_size)
+    train_loader_creator = DataLoaderConstructor(train_loader_creator_config)
+
+    if args.model_type == 'contrastive':
+        train_loader_creator_u_config = DataConfig(args, train=True, dataset=args.unlabeled_dataset,
+                                                   dataset_type=args.model_type, is_continual=False, 
+                                                   batch_size=args.batch_size)
+        train_loader_creator_u = DataLoaderConstructor(train_loader_creator_u_config)
+
+    test_loader_creator_config = DataConfig(args, train=False, dataset=args.dataset,
+                                            dataset_type=args.model_type, is_continual=True, 
+                                            batch_size=args.test_batch_size, exemplar_size=0)
+    test_loader_creator = DataLoaderConstructor(test_loader_creator_config)
+
+    if args.save_model:
+        torch.save(model.state_dict(), "initial.pt")
+
+    args.vis_base_dir = 'plots/' + log_file + '/'
+    if args.model_type == 'softmax':
+        train(args, model, device, train_loader_creator,
+              test_loader_creator, logger)
+        test(args, model, device, test_loader_creator, logger)
+    elif args.model_type == 'triplet':
+        train_triplet(args, model, device, train_loader_creator,
+                      test_loader_creator, logger)
+    elif args.model_type == 'contrastive':
+        train_contrastive(args, model, device, train_loader_creator,
+                          train_loader_creator_u, test_loader_creator, logger)
+
+
+
+if __name__ == '__main__':
+    main()
+
+/localscratch/msalari.42732997.0/continual-learning/log_utils.py
+import os
+import logging
+
+
+def makedirs(dirname):
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+
+
+def get_logger(logpath, filepath, package_files=[], displaying=True, saving=True, debug=False):
+    logger = logging.getLogger()
+    if debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logger.setLevel(level)
+    if saving:
+        info_file_handler = logging.FileHandler(logpath, mode="a")
+        info_file_handler.setLevel(level)
+        logger.addHandler(info_file_handler)
+    if displaying:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        logger.addHandler(console_handler)
+    logger.info(filepath)
+    with open(filepath, "r") as f:
+        logger.info(f.read())
+
+    for f in package_files:
+        logger.info(f)
+        with open(f, "r") as package_f:
+            logger.info(package_f.read())
+
+    return logger
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+/localscratch/msalari.42732997.0/continual-learning/model.py
+from models.simple import SimpleNet
+from models.resnet import resnet18
+
+def get_model(args):
+
+    if args.dataset == 'mnist':
+        model = SimpleNet()
+    elif args.dataset == 'cifar10':
+        model = resnet18(num_classes=10)
+    elif args.dataset == 'cifar100':
+        model = resnet18(num_classes=100)
+    elif args.dataset == 'imagenet':
+        model = resnet18(num_classes=1000)
+    else:
+        raise ValueError('dataset is not supported.')
+    return model
+
+/localscratch/msalari.42732997.0/continual-learning/train.py
+import time
+from termcolor import cprint
+
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+
+from test import test, accuracy
+from log_utils import AverageMeter
+# from visualize import plot_embedding_tsne
+
+def train(args, model, device, train_loader_creator, test_loader_creator, logger):   
+
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,args.epochs+1):
+            
+            model.train()
+            losses = AverageMeter()
+            acc = AverageMeter()
+            batch_time = AverageMeter()
+            data_time = AverageMeter()
+
+            end = time.time()
+            for batch_idx, (data, target) in enumerate(train_loader):
+                data_time.update(time.time() - end)
+
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
+
+                output = model(data)
+
+                loss = criterion(output, target)
+
+                loss.backward()                
+                optimizer.step()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
+                        'DTime {data_time.avg:.3f}\t'
+                        'BTime {batch_time.avg:.3f}\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader),
+                            batch_time=batch_time, data_time=data_time, loss=losses, acc=acc))
+
+            scheduler.step()
+            if epoch % args.test_interval == 0:
+                test(args, model, device, test_loader_creator, logger)
+
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42732997.0/continual-learning/train_triplet.py
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+from termcolor import cprint
+
+from test import test
+from optim import triplet_loss
+# from visualize import plot_embedding_tsne
+
+def train_triplet(args, model, device, train_loader_creator, test_loader_creator, logger):   
+    model.train()
+
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,args.epochs+1):
+            for batch_idx, (data, target) in enumerate(train_loader):
+
+                data, target = data.to(device), target.to(device)
+
+                optimizer.zero_grad()
+
+                embeddings = []
+                for i in range(3):
+                    embedding = model.get_embedding(data[:,i])
+                    embeddings.append(embedding)
+                anchor_emb, pos_emb, neg_emb = embeddings[0], embeddings[1], embeddings[2]
+
+                y = torch.FloatTensor(anchor_emb.shape[0]).fill_(-1).to(device)
+                loss = triplet_loss(anchor_emb, pos_emb, neg_emb, y)
+                
+                loss.backward()                
+                optimizer.step()
+                scheduler.step()
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {} Epoch: {} '
+                                '[{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f}'.format(
+                                task_idx+1, epoch, batch_idx * args.batch_size,
+                                len(train_loader.dataset),
+                                100. * (batch_idx * args.batch_size) / len(train_loader.dataset),
+                                loss.item()))
+        
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42732997.0/continual-learning/optim.py
+import torch
+import torch.nn.functional as F
+
+import numpy as np
+
+
+def seprated_softmax_loss(score_mean, target, tasks_targets, task_id):
+    curr_targets = tasks_targets[task_id]
+    prev_targets = []
+    for i in range(task_id):
+        prev_targets.extend(tasks_targets[i])
+    
+    curr_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)
+    prev_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)
+    for t in curr_targets:
+        curr_mask = curr_mask | (target == t)
+    for t in prev_targets:
+        prev_mask = prev_mask | (target == t)
+    curr_mask = curr_mask.view(curr_mask.shape[0])
+    prev_mask = prev_mask.view(prev_mask.shape[0])
+
+    curr_target = target[curr_mask]
+    curr_score = score_mean[curr_mask]
+    curr_output = F.log_softmax(curr_score, dim=1)
+    prev_target = target[prev_mask]
+    prev_score = score_mean[prev_mask]
+    prev_output = F.log_softmax(prev_score, dim=1)
+
+    loss = F.nll_loss(curr_output, curr_target)
+    if prev_target.shape[0] > 0:
+        loss += F.nll_loss(prev_output, prev_target)
+
+    return loss
+
+
+def triplet_loss(anchor_emb, pos_emb, neg_emb, target, margin=0.02):
+    dist_a = F.pairwise_distance(anchor_emb, pos_emb, 2)
+    dist_b = F.pairwise_distance(anchor_emb, neg_emb, 2)
+    criterion = torch.nn.MarginRankingLoss(margin = margin)
+    loss_triplet = criterion(dist_a, dist_b, target)
+    # loss_embedd = anchor_emb.norm(2) + pos_emb.norm(2) + neg_emb.norm(2)
+    loss = loss_triplet #+ 0.001 * loss_embedd
+    return loss
+
+
+class ContrastiveLoss(torch.nn.Module):
+
+    def __init__(self, device, batch_size_l, batch_size_u, temperature):
+        super(ContrastiveLoss, self).__init__()
+        self.device = device
+        self.batch_size_l = batch_size_l
+        self.batch_size_u = batch_size_u
+        self.batch_size = batch_size_l + batch_size_u
+        self.temperature = temperature
+
+        self._cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
+
+        self.self_sup_negative_mask = self._get_self_sup_negative_mask()
+        self.self_sup_criterion = torch.nn.CrossEntropyLoss(reduction="sum")
+
+    def _get_self_sup_negative_mask(self):
+        diag = np.eye(2 * self.batch_size)
+        l1 = np.eye(2 * self.batch_size,  k=-self.batch_size)
+        l2 = np.eye(2 * self.batch_size, k=self.batch_size)
+        mask = torch.from_numpy((diag + l1 + l2))
+        mask = (1 - mask).type(torch.bool)
+        return mask.to(self.device)
+
+        # l means labeled, u means unlabeled
+    def forward(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        self._update_batch_size(zis_l, zjs_l, zis_u, zjs_u, targets_l)
+        self_sup_representations = torch.cat([zis_l,zis_u,zjs_l,zjs_u], dim=0)
+        self_sup_similarity_matrix = self.cosine_similarity(self_sup_representations, 
+                                                            self_sup_representations)
+
+        self_sup_loss = self._self_sup_loss(self_sup_similarity_matrix)
+
+        sup_similarity_matrix = self_sup_similarity_matrix[:self.batch_size_l, :self.batch_size_l]
+        sup_loss = self._sup_loss(sup_similarity_matrix, targets_l)
+
+        return self_sup_loss + sup_loss
+
+    def _update_batch_size(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        assert zis_l.shape[0] == zjs_l.shape[0]
+        assert zis_u.shape[0] == zjs_u.shape[0]
+        assert zis_l.shape[0] == targets_l.shape[0]
+
+        if self.batch_size_l != zis_l.shape[0] or self.batch_size_u != zjs_u.shape[0]:
+            self.batch_size_l = zis_l.shape[0]
+            self.batch_size_u = zjs_u.shape[0]
+            self.batch_size = self.batch_size_l + self.batch_size_u
+            self.self_sup_negative_mask = self._get_self_sup_negative_mask()
+
+    def cosine_similarity(self, x, y):
+        v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
+        return v
+
+    def _self_sup_loss(self, similarity_matrix):
+        l_pos = torch.diag(similarity_matrix, self.batch_size)
+        r_pos = torch.diag(similarity_matrix, -self.batch_size)
+        positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
+
+        negatives = similarity_matrix[self.self_sup_negative_mask].view(2 * self.batch_size, -1)
+
+        logits = torch.cat((positives, negatives), dim=1)
+        logits /= self.temperature
+
+        labels = torch.zeros(2 * self.batch_size).to(self.device).long()
+        loss = self.self_sup_criterion(logits, labels)
+
+        return loss / (2 * self.batch_size)
+
+    def _sup_loss(self, similarity_matrix, targets):
+        logits = similarity_matrix / self.temperature
+        logits = self._drop_diagonal(logits)
+
+        pos_targets = self._get_sup_pos_targets(targets)
+        cross_ent = self.cross_entropy(logits, pos_targets)
+
+        loss = cross_ent.sum()
+
+        return loss / self.batch_size_l
+
+    def _get_sup_pos_targets(self, targets):
+        targets_mat = targets.repeat(targets.shape[0], 1)
+        tmp = targets.unsqueeze(dim=1).repeat(1, targets.shape[0])
+        off_diagonal = ~torch.eye(targets.shape[0]).type(torch.bool).to(self.device)
+
+        pos_targets = (targets_mat == tmp) & off_diagonal
+        pos_targets = pos_targets.type(torch.float32)
+
+        pos_targets = self._drop_diagonal(pos_targets)
+
+        return pos_targets.to(self.device)
+
+    def _drop_diagonal(self, x):
+        mask = ~torch.eye(x.shape[0]).type(torch.bool).to(self.device)
+        return x[mask].view(x.shape[0], -1)
+
+    def cross_entropy(self, output, target):
+        m = torch.nn.LogSoftmax(dim=1)
+        logsoftmax = -m(output)
+        logsoftmax[~target.type(torch.bool)] = 0.0
+        logsoftmax = logsoftmax.sum(dim=1)
+        weights = target.sum(dim=1)
+        return logsoftmax / (weights + 1e-8)
+
+/localscratch/msalari.42732997.0/continual-learning/data_utils.py
+import math
+import h5py
+import numpy as np
+from PIL import Image
+
+import torch
+import torchvision
+
+
+class DataConfig:
+
+    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, 
+                 workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
+        
+        self.train = train
+        self.dataset = dataset
+        self.dataset_type = dataset_type
+        self.is_continual = is_continual
+        self.batch_size = batch_size
+
+        self.workers = workers if workers else args.workers
+        self.tasks = tasks if tasks else args.tasks
+        self.exemplar_size = exemplar_size if exemplar_size else args.exemplar_size
+        self.oversample_ratio = oversample_ratio if oversample_ratio else args.oversample_ratio
+
+
+class DataLoaderConstructor:
+
+    def __init__(self, config):
+        self.config = config
+
+        original_data, original_targets = self.get_data_targets(self.config.dataset)
+        transforms = self.get_transforms(self.config.dataset)
+
+        self.tasks_targets, indexes = \
+            self.get_tasks_targets_indexes(original_targets)
+        
+        self.data_loaders = self.create_dataloaders(original_data, original_targets,
+                                                    indexes, transforms)
+
+    def get_data_targets(self, dataset_name):
+        if dataset_name == 'mnist':
+            dataset = torchvision.datasets.MNIST('./data/mnist',
+                                                  train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'cifar10':
+            dataset = torchvision.datasets.CIFAR10('./data/cifar10',
+                                                    train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'cifar100':
+            dataset = torchvision.datasets.CIFAR100('./data/cifar100',
+                                                     train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'imagenet':
+            if self.config.train:
+                file_path = './data/imagenet/imagenet_train_500.h5'
+            else:
+                file_path = './data/imagenet/imagenet_test_100.h5'
+            with h5py.File(file_path, 'r') as f:
+                data, targets = f['data'][:], f['labels'][:]
+        else:
+            raise ValueError('dataset is not supported.')
+            
+        if torch.is_tensor(targets):
+            data = data.numpy()
+            targets = targets.numpy()
+        elif type(targets) == list:
+            data = np.array(data)
+            targets = np.array(targets)
+
+        return data, targets
+
+    def get_transforms(self, dataset_name):
+        means = {
+            'mnist':(0.1307,),
+            'cifar10':(0.485, 0.456, 0.406),
+            'cifar100':(0.5070751592371323, 0.48654887331495095, 0.4409178433670343),
+            'imagenet':(0.485, 0.456, 0.406)
+        }
+        stds = {
+            'mnist':(0.3081,),
+            'cifar10':(0.229, 0.224, 0.225),
+            'cifar100':(0.2673342858792401, 0.2564384629170883, 0.27615047132568404),
+            'imagenet':(0.229, 0.224, 0.225)
+        }
+
+        transforms = []
+        if dataset_name in ['cifar10', 'cifar100', 'imagenet'] and self.config.train:
+            transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
+                                torchvision.transforms.RandomHorizontalFlip()])
+        transforms.extend([torchvision.transforms.ToTensor(),
+                            torchvision.transforms.Normalize(means[dataset_name],
+                                                             stds[dataset_name])])
+        return torchvision.transforms.Compose(transforms)
+
+    def get_tasks_targets_indexes(self, original_targets):
+        if self.config.is_continual:
+            continual_constructor = ContinualIndexConstructor(original_targets, 
+                                                              self.config.train, 
+                                                              self.config.tasks, 
+                                                              self.config.exemplar_size, 
+                                                              self.config.oversample_ratio)
+            tasks_targets = continual_constructor.tasks_targets
+            indexes = continual_constructor.indexes
+        else:
+            tasks_targets = [list(np.unique(original_targets))] * self.config.tasks
+            indexes = []
+            for i in range(self.config.tasks):
+                indexes.append(np.random.permutation(original_targets.shape[0]))
+        
+        return tasks_targets, indexes
+
+    def create_dataloaders(self, data, targets, indexes, transforms):
+        data_loaders = []
+
+        for task_indexes in indexes:
+            if self.config.dataset_type == 'softmax':
+                dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
+            elif self.config.dataset_type == 'triplet':
+                dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
+            elif self.config.dataset_type == 'contrastive':
+                dataset = ContrastiveDataset(data, targets, task_indexes, transform=transforms)
+            
+            kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
+                torch.cuda.device_count() > 0 else {}
+            data_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=self.config.batch_size, shuffle=True, **kwargs)
+            data_loaders.append(data_loader)
+
+        return data_loaders
+
+
+class ContinualIndexConstructor:
+
+    def __init__(self, targets, train, tasks, exemplar_size, oversample_ratio):
+        self.tasks_targets = self.create_tasks_targets(np.unique(targets), tasks)
+
+        data_indexes, exemplars_indexes = self.divide_indexes_into_tasks(targets, exemplar_size)
+
+        if oversample_ratio > 0.0:
+            os_sizes = self.get_os_exemplar_size(data_indexes, exemplars_indexes,
+                                                 oversample_ratio)
+            exemplars_indexes = self.get_oversampled_exemplars(exemplars_indexes, os_sizes)
+        
+        self.indexes = self.combine_data_exemplars(data_indexes, exemplars_indexes)
+
+    def create_tasks_targets(self, unique_targets, ntasks):
+        ntargets_per_task = int(len(unique_targets) / ntasks)
+        ntargets_first_task = ntargets_per_task + len(unique_targets) % ntasks
+        tasks_targets = [unique_targets[:ntargets_first_task]]
+
+        target_idx = ntargets_first_task
+        for i in range(ntasks-1):
+            tasks_targets.append(unique_targets[target_idx: target_idx+ntargets_per_task])
+            target_idx += ntargets_per_task
+
+        return tasks_targets
+
+    def divide_indexes_into_tasks(self, targets, exemplar_size):
+        data_indexes = []
+        exemplars_indexes = []
+
+        for i, task_targets in enumerate(self.tasks_targets):
+            prev_targets = []
+            for prev_tasks_targets in self.tasks_targets[:i]:
+                prev_targets.extend(prev_tasks_targets)
+
+            task_data_indexes = np.empty((0), dtype=np.intc)
+            task_exemplars_indexes = np.empty((0), dtype=np.intc)
+
+            for target in task_targets:
+                task_data_indexes = np.append(task_data_indexes, np.where(targets == target)[0])
+
+            for target in prev_targets:
+                size = int(exemplar_size/len(prev_targets))
+                prev_all_indexes = np.where(targets == target)[0]
+                idx = np.random.randint(prev_all_indexes.shape[0], size=size)
+                target_exemplars_indexes = prev_all_indexes[idx]
+                task_exemplars_indexes = np.append(task_exemplars_indexes, target_exemplars_indexes)
+
+            data_indexes.append(task_data_indexes)
+            exemplars_indexes.append(task_exemplars_indexes)
+        
+        return data_indexes, exemplars_indexes
+
+    def get_os_exemplar_size(self, data_indexes, exemplars_indexes, ratio):
+        os_sizes = []
+        for i in range(len(exemplars_indexes)):
+            data_target_size = len(self.tasks_targets[i])
+            exemplar_target_size = sum([len(x) for x in self.tasks_targets[:i]])
+            data_size = data_indexes[i].shape[0]
+
+            size = int(exemplar_target_size * ratio * (data_size / data_target_size))
+            if exemplars_indexes[i].shape[0] == 0:
+                size = 0
+            os_sizes.append(size)
+        return os_sizes
+    
+    def get_oversampled_exemplars(self, exemplars_indexes, os_sizes):
+        os_exemplars_indexes = []
+
+        for i, exemplar_indexes in enumerate(exemplars_indexes):
+            os_exemplars_indexes_idx = np.random.permutation(min(len(exemplar_indexes),
+                                                             os_sizes[i]))
+            if os_sizes[i] > len(exemplar_indexes):
+                extra_exemplar_indexes_idx = np.random.randint(len(exemplar_indexes),
+                                                       size=os_sizes[i]-len(exemplar_indexes))
+                os_exemplars_indexes_idx = np.append(os_exemplars_indexes_idx,
+                                                     extra_exemplar_indexes_idx)
+
+            os_exemplar_indexes = exemplar_indexes[os_exemplars_indexes_idx]
+            os_exemplars_indexes.append(os_exemplar_indexes)
+        
+        return os_exemplars_indexes
+
+    def combine_data_exemplars(self, data_indexes, exemplars_indexes):
+        indexes = []
+
+        for i in range(len(data_indexes)):
+            task_data_indexes = data_indexes[i]
+            task_exemplars_indexes = exemplars_indexes[i]
+
+            task_indexes = np.append(task_data_indexes, task_exemplars_indexes)
+            perm = np.random.permutation(len(task_indexes))
+            task_indexes = task_indexes[perm]
+
+            indexes.append(task_indexes)
+        
+        return indexes
+
+
+
+class SimpleDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform=None):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        org_idx = self.indexes[idx]
+        img, target = self.data[org_idx], int(self.targets[org_idx])
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, target
+
+
+class TripletDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform=None):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        self.anchor_idxs, self.pos_idxs, self.neg_idxs = self.create_triplets(targets, indexes)
+
+    def create_triplets(self, targets, indexes):
+        targets = targets[indexes]
+
+        anchor_idxs = np.empty(0, dtype=np.intc)
+        pos_idxs = np.empty(0, dtype=np.intc)
+        neg_idxs = np.empty(0, dtype=np.intc)
+        for target in np.unique(targets):
+            anchor_idx = np.where(targets==target)[0]
+            pos_idx = np.where(targets==target)[0]
+            while np.any((anchor_idx-pos_idx)==0):
+                np.random.shuffle(pos_idx)
+            neg_idx = np.random.choice(np.where(targets!=target)[0], len(anchor_idx), replace=True)
+            anchor_idxs = np.append(anchor_idxs, anchor_idx)
+            pos_idxs = np.append(pos_idxs, pos_idx)
+            neg_idxs = np.append(neg_idxs, neg_idx)
+
+        perm = np.random.permutation(len(anchor_idxs))
+        anchor_idxs = anchor_idxs[perm]
+        pos_idxs = pos_idxs[perm]
+        neg_idxs = neg_idxs[perm]
+
+        return anchor_idxs, pos_idxs, neg_idxs
+
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        anchor_indx = self.indexes[self.anchor_idxs[idx]]
+        pos_idx = self.indexes[self.pos_idxs[idx]]
+        neg_idx = self.indexes[self.neg_idxs[idx]]
+
+        target = int(self.targets[anchor_indx])
+        imgs = [self.data[anchor_indx], self.data[pos_idx], self.data[neg_idx]]
+        for i in range(len(imgs)):
+            mode = 'L' if len(imgs[i].shape) == 2 else 'RGB'
+            imgs[i] = Image.fromarray(imgs[i], mode=mode)
+
+            if self.transform is not None:
+                imgs[i] = self.transform(imgs[i])
+
+        return torch.stack((imgs[0], imgs[1], imgs[2])), target
+
+
+
+class ContrastiveDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        org_idx = self.indexes[idx]
+        img, target = self.data[org_idx], int(self.targets[org_idx])
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
+
+        return self.transform(img), self.transform(img), target
+
+/localscratch/msalari.42732997.0/continual-learning/test.py
+import torch
+import torch.nn.functional as F
+import numpy as np
+
+from log_utils import AverageMeter
+
+def test(args, model, device, test_loader_creator, logger):
+    model.eval()
+
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+
+    with torch.no_grad():
+        losses = AverageMeter()
+        acc = AverageMeter()
+        
+        for test_loader in test_loader_creator.data_loaders:
+
+            for data, target in test_loader:
+
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+
+                loss = criterion(output, target)
+
+                output = output.float()
+                loss = loss.float()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+    logger.info('Test set: Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Acc {acc.avg:.3f}'.format(
+                loss=losses, acc=acc))
+
+    # TODO calculate accuracy per class.
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+/localscratch/msalari.42732997.0/continual-learning/test_contrastive.py
+import torch
+
+from log_utils import AverageMeter
+
+def test_contrastive(args, model, nearest_proto_model, device, test_loader_creator_l, logger): 
+    model.eval()  
+
+    acc = AverageMeter()
+
+    test_loaders_l = test_loader_creator_l.data_loaders
+
+    with torch.no_grad():
+        for test_loader_l in test_loaders_l:
+
+            for batch_idx, (data, _, target) in enumerate(test_loader_l):
+                data, target = data.to(device), target.to(device)
+                cur_feats = model.get_embedding(data)
+                output = nearest_proto_model.predict(cur_feats)
+                it_acc = (output == target).sum().item() / data.shape[0] 
+                acc.update(it_acc, data.size(0))
+    
+    print('Test Acc: {acc.avg:.3f}'.format(acc=acc))
+
+/localscratch/msalari.42732997.0/continual-learning/train_contrastive.py
+import copy
+import time
+
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+from termcolor import cprint
+
+from log_utils import AverageMeter
+from models.contrastive_wrapper import ProjectiveWrapper
+from models.nearest_prototype import NearestPrototype
+from optim import ContrastiveLoss
+from test_contrastive import test_contrastive
+# from visualize import plot_embedding_tsne
+
+def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
+                      test_loader_creator, logger):   
+    proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
+    nearest_proto_model = NearestPrototype(sigma=0.3)
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07) # TODO
+    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    train_loaders_l = train_loader_creator_l.data_loaders
+    train_loaders_u = train_loader_creator_u.data_loaders
+    for task_idx, (train_loader_l, train_loader_u) in enumerate(zip(train_loaders_l, train_loaders_u)):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+        
+        old_model = copy.deepcopy(model)
+
+        for epoch in range(1,args.epochs+1):
+            
+            model.train()
+            losses = AverageMeter()
+            batch_time = AverageMeter()
+            data_time = AverageMeter()
+
+            end = time.time()
+            for batch_idx, ((data_l_1, data_l_2, target), (data_u_1, data_u_2, _)) \
+                in enumerate(zip(train_loader_l, train_loader_u)):
+                data_time.update(time.time() - end)
+
+                data_l_1, data_l_2, target = data_l_1.to(device), data_l_2.to(device), target.to(device)
+                data_u_1, data_u_2 = data_u_1.to(device), data_u_2.to(device)
+                optimizer.zero_grad()
+
+                output_l_1, output_l_2 = proj_model(data_l_1), proj_model(data_l_2)
+                output_u_1, output_u_2 = proj_model(data_u_1), proj_model(data_u_2)
+
+                loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
+
+                loss.backward()                
+                optimizer.step()
+
+                losses.update(loss.item(), data_l_1.size(0))
+
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
+                        'DTime {data_time.avg:.3f}\t'
+                        'BTime {batch_time.avg:.3f}\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader_l),
+                            batch_time=batch_time, data_time=data_time, loss=losses))
+
+            scheduler.step()
+
+        for batch_idx, (data, _, target) in enumerate(train_loader_l):
+            data, target = data.to(device), target.to(device)
+            prev_feats = None
+            if task_idx > 0:
+                prev_feats = old_model.get_embedding(data).detach()
+            cur_feats = model.get_embedding(data).detach()
+            nearest_proto_model.add_features(task_idx, prev_feats, cur_feats, target)
+
+        acc = AverageMeter()
+        for batch_idx, (data, _, target) in enumerate(train_loader_l):
+            data, target = data.to(device), target.to(device)
+            cur_feats = model.get_embedding(data)
+            output = nearest_proto_model.predict(cur_feats)
+            it_acc = (output == target).sum().item() / data.shape[0] 
+            acc.update(it_acc, data.size(0))
+        print('Train Acc: {acc.avg:.3f}'.format(acc=acc))
+
+        test_contrastive(args, model, nearest_proto_model, device, test_loader_creator, logger)
+
+        # plot_embedding_tsne(args, task_idx, train_loader_creator_l, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42732997.0/continual-learning/visualize.py
+import torch
+import numpy as np
+from tsnecuda import TSNE
+import seaborn as sns
+import matplotlib.pyplot as plt
+from log_utils import makedirs
+
+
+def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
+    embedding_size = model.classifier.in_features
+    X = np.empty((0,embedding_size), dtype=np.float32)
+    targets = np.empty((0))
+    with torch.no_grad():
+        for data_loader in data_loader_creator.data_loaders:
+            for data_target in data_loader:
+                if data_loader_creator.config.dataset_type in ['softmax', 'triplet']:
+                    data, target = data_target
+                elif data_loader_creator.config.dataset_type == 'contrastive':
+                    data, _, target = data_target
+
+                if data_loader_creator.config.dataset_type == 'triplet':
+                    data = data[:,0]
+                    
+                data = data.to(device)
+                embedding = model.get_embedding(data)
+                embedding = embedding.cpu().detach().numpy()
+                target = target.cpu().detach().numpy()
+                X = np.append(X, embedding, axis=0)
+                targets = np.append(targets, target)
+    
+    X_tsne = TSNE().fit_transform(X)
+
+    dir_name = args.vis_base_dir + 'T' + str(task_id+1) + '/'
+    makedirs(dir_name)
+
+    for t_id, task in enumerate(data_loader_creator.tasks_targets):
+        plt.figure()
+        palette = sns.color_palette("bright", len(task))
+        idx = np.isin(targets, task)
+        sns_plot = sns.scatterplot(X_tsne[idx,0], X_tsne[idx,1], hue=targets[idx], legend='full', palette=palette, s=20)
+        plt.savefig(dir_name + 'T' + str(t_id+1) + '.png')
+
+    plt.figure()
+    palette = sns.color_palette("bright", np.unique(targets).shape[0])
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
+    plt.savefig(dir_name + 'all.png')
+    print('Visualization Ended.')
+
+
+Namespace(acc_per_class=False, batch_size=128, dataset='cifar10', epochs=60, exemplar_size=0, gamma=0.2, gpu=0, log_interval=100, lr=0.1, milestones=[60, 120, 160], model_type='contrastive', oversample_ratio=0.0, save='experiments/', save_model=False, seed=None, tasks=1, test_batch_size=128, test_interval=5, unlabeled_dataset='cifar10', weight_decay=0.0005, workers=4)
+Use GPU 0 for training
+Files already downloaded and verified
+Files already downloaded and verified
+Files already downloaded and verified
+Train Task: 1 Epoch: [  1][  0/391]	DTime 0.277	BTime 0.602	Loss 11.0228 (11.0228)
+Train Task: 1 Epoch: [  1][100/391]	DTime 0.003	BTime 0.283	Loss 10.3056 (10.6957)
+Train Task: 1 Epoch: [  1][200/391]	DTime 0.002	BTime 0.281	Loss 10.0697 (10.4620)
+Train Task: 1 Epoch: [  1][300/391]	DTime 0.001	BTime 0.281	Loss 10.2097 (10.3463)
+Train Task: 1 Epoch: [  2][  0/391]	DTime 0.283	BTime 0.569	Loss 10.0113 (10.0113)
+Train Task: 1 Epoch: [  2][100/391]	DTime 0.003	BTime 0.282	Loss 10.0903 (10.0743)
+Train Task: 1 Epoch: [  2][200/391]	DTime 0.002	BTime 0.281	Loss 10.1173 (10.0440)
+Train Task: 1 Epoch: [  2][300/391]	DTime 0.001	BTime 0.281	Loss 9.6964 (10.0204)
+Train Task: 1 Epoch: [  3][  0/391]	DTime 0.294	BTime 0.580	Loss 9.8512 (9.8512)
+Train Task: 1 Epoch: [  3][100/391]	DTime 0.003	BTime 0.283	Loss 9.8502 (9.8684)
+Train Task: 1 Epoch: [  3][200/391]	DTime 0.002	BTime 0.281	Loss 10.0005 (9.8793)
+Train Task: 1 Epoch: [  3][300/391]	DTime 0.001	BTime 0.281	Loss 9.8150 (9.8642)
+Train Task: 1 Epoch: [  4][  0/391]	DTime 0.279	BTime 0.567	Loss 9.1277 (9.1277)
+Train Task: 1 Epoch: [  4][100/391]	DTime 0.003	BTime 0.282	Loss 9.2429 (9.2753)
+Train Task: 1 Epoch: [  4][200/391]	DTime 0.002	BTime 0.281	Loss 8.9287 (9.2301)
+Train Task: 1 Epoch: [  4][300/391]	DTime 0.001	BTime 0.280	Loss 8.9639 (9.1962)
+Train Task: 1 Epoch: [  5][  0/391]	DTime 0.303	BTime 0.586	Loss 8.8528 (8.8528)
+Train Task: 1 Epoch: [  5][100/391]	DTime 0.003	BTime 0.282	Loss 8.5463 (8.6316)
+Train Task: 1 Epoch: [  5][200/391]	DTime 0.002	BTime 0.281	Loss 8.1193 (8.5391)
+Train Task: 1 Epoch: [  5][300/391]	DTime 0.001	BTime 0.280	Loss 8.0007 (8.4669)
+Train Task: 1 Epoch: [  6][  0/391]	DTime 0.274	BTime 0.560	Loss 8.1900 (8.1900)
+Train Task: 1 Epoch: [  6][100/391]	DTime 0.003	BTime 0.282	Loss 8.4007 (8.0936)
+Train Task: 1 Epoch: [  6][200/391]	DTime 0.002	BTime 0.281	Loss 8.1760 (8.0085)
+Train Task: 1 Epoch: [  6][300/391]	DTime 0.001	BTime 0.280	Loss 7.4041 (7.9180)
+Train Task: 1 Epoch: [  7][  0/391]	DTime 0.289	BTime 0.576	Loss 7.2470 (7.2470)
+Train Task: 1 Epoch: [  7][100/391]	DTime 0.003	BTime 0.283	Loss 7.3231 (7.5320)
+Train Task: 1 Epoch: [  7][200/391]	DTime 0.002	BTime 0.281	Loss 7.3504 (7.5217)
+Train Task: 1 Epoch: [  7][300/391]	DTime 0.001	BTime 0.281	Loss 7.3709 (7.5064)
+Train Task: 1 Epoch: [  8][  0/391]	DTime 0.307	BTime 0.593	Loss 7.5888 (7.5888)
+Train Task: 1 Epoch: [  8][100/391]	DTime 0.003	BTime 0.282	Loss 6.8986 (7.3756)
+Train Task: 1 Epoch: [  8][200/391]	DTime 0.002	BTime 0.281	Loss 7.1122 (7.2927)
+Train Task: 1 Epoch: [  8][300/391]	DTime 0.001	BTime 0.280	Loss 6.8687 (7.2291)
+Train Task: 1 Epoch: [  9][  0/391]	DTime 0.299	BTime 0.583	Loss 6.9983 (6.9983)
+Train Task: 1 Epoch: [  9][100/391]	DTime 0.003	BTime 0.282	Loss 6.8895 (6.9354)
+Train Task: 1 Epoch: [  9][200/391]	DTime 0.002	BTime 0.281	Loss 6.6708 (6.9513)
+Train Task: 1 Epoch: [  9][300/391]	DTime 0.001	BTime 0.280	Loss 7.0702 (6.9564)
+Train Task: 1 Epoch: [ 10][  0/391]	DTime 0.302	BTime 0.588	Loss 6.6080 (6.6080)
+Train Task: 1 Epoch: [ 10][100/391]	DTime 0.003	BTime 0.283	Loss 6.8674 (6.8020)
+Train Task: 1 Epoch: [ 10][200/391]	DTime 0.002	BTime 0.281	Loss 6.6949 (6.7920)
+Train Task: 1 Epoch: [ 10][300/391]	DTime 0.001	BTime 0.281	Loss 6.5202 (6.7509)
+Train Task: 1 Epoch: [ 11][  0/391]	DTime 0.290	BTime 0.578	Loss 6.6747 (6.6747)
+Train Task: 1 Epoch: [ 11][100/391]	DTime 0.003	BTime 0.283	Loss 6.4957 (6.6002)
+Train Task: 1 Epoch: [ 11][200/391]	DTime 0.002	BTime 0.281	Loss 6.7071 (6.5659)
+Train Task: 1 Epoch: [ 11][300/391]	DTime 0.001	BTime 0.280	Loss 6.2764 (6.5551)
+Train Task: 1 Epoch: [ 12][  0/391]	DTime 0.298	BTime 0.587	Loss 6.8122 (6.8122)
+Train Task: 1 Epoch: [ 12][100/391]	DTime 0.003	BTime 0.283	Loss 6.4979 (6.4850)
+Train Task: 1 Epoch: [ 12][200/391]	DTime 0.002	BTime 0.281	Loss 6.3822 (6.4868)
+Train Task: 1 Epoch: [ 12][300/391]	DTime 0.001	BTime 0.281	Loss 6.4064 (6.4868)
+Train Task: 1 Epoch: [ 13][  0/391]	DTime 0.298	BTime 0.583	Loss 6.2986 (6.2986)
+Train Task: 1 Epoch: [ 13][100/391]	DTime 0.003	BTime 0.283	Loss 6.7473 (6.3935)
+Train Task: 1 Epoch: [ 13][200/391]	DTime 0.002	BTime 0.281	Loss 6.5486 (6.3573)
+Train Task: 1 Epoch: [ 13][300/391]	DTime 0.001	BTime 0.281	Loss 6.3392 (6.3255)
+Train Task: 1 Epoch: [ 14][  0/391]	DTime 0.305	BTime 0.592	Loss 6.2215 (6.2215)
+Train Task: 1 Epoch: [ 14][100/391]	DTime 0.003	BTime 0.283	Loss 6.4452 (6.1926)
+Train Task: 1 Epoch: [ 14][200/391]	DTime 0.002	BTime 0.281	Loss 6.2356 (6.2074)
+Train Task: 1 Epoch: [ 14][300/391]	DTime 0.001	BTime 0.280	Loss 5.9908 (6.2186)
+Train Task: 1 Epoch: [ 15][  0/391]	DTime 0.299	BTime 0.588	Loss 6.0299 (6.0299)
+Train Task: 1 Epoch: [ 15][100/391]	DTime 0.003	BTime 0.283	Loss 6.2330 (6.1016)
+Train Task: 1 Epoch: [ 15][200/391]	DTime 0.002	BTime 0.281	Loss 6.0546 (6.1153)
+Train Task: 1 Epoch: [ 15][300/391]	DTime 0.001	BTime 0.281	Loss 5.8034 (6.1073)
+Train Task: 1 Epoch: [ 16][  0/391]	DTime 0.324	BTime 0.608	Loss 5.6716 (5.6716)
+Train Task: 1 Epoch: [ 16][100/391]	DTime 0.003	BTime 0.283	Loss 6.0090 (5.9611)
+Train Task: 1 Epoch: [ 16][200/391]	DTime 0.002	BTime 0.281	Loss 5.9282 (5.9826)
+Train Task: 1 Epoch: [ 16][300/391]	DTime 0.001	BTime 0.280	Loss 5.8507 (5.9755)
+Train Task: 1 Epoch: [ 17][  0/391]	DTime 0.298	BTime 0.583	Loss 5.7277 (5.7277)
+Train Task: 1 Epoch: [ 17][100/391]	DTime 0.003	BTime 0.282	Loss 5.6569 (5.9028)
+Train Task: 1 Epoch: [ 17][200/391]	DTime 0.002	BTime 0.281	Loss 5.8626 (5.8936)
+Train Task: 1 Epoch: [ 17][300/391]	DTime 0.001	BTime 0.280	Loss 5.7972 (5.8896)
+Train Task: 1 Epoch: [ 18][  0/391]	DTime 0.303	BTime 0.589	Loss 5.9032 (5.9032)
+Train Task: 1 Epoch: [ 18][100/391]	DTime 0.003	BTime 0.282	Loss 5.6821 (5.7972)
+Train Task: 1 Epoch: [ 18][200/391]	DTime 0.002	BTime 0.281	Loss 5.9595 (5.7796)
+Train Task: 1 Epoch: [ 18][300/391]	DTime 0.001	BTime 0.280	Loss 5.8159 (5.7731)
+Train Task: 1 Epoch: [ 19][  0/391]	DTime 0.290	BTime 0.578	Loss 5.9367 (5.9367)
+Train Task: 1 Epoch: [ 19][100/391]	DTime 0.003	BTime 0.282	Loss 5.5069 (5.7265)
+Train Task: 1 Epoch: [ 19][200/391]	DTime 0.002	BTime 0.281	Loss 6.0424 (5.7193)
+Train Task: 1 Epoch: [ 19][300/391]	DTime 0.001	BTime 0.280	Loss 5.4987 (5.7249)
+Train Task: 1 Epoch: [ 20][  0/391]	DTime 0.299	BTime 0.586	Loss 5.5800 (5.5800)
+Train Task: 1 Epoch: [ 20][100/391]	DTime 0.003	BTime 0.283	Loss 5.7019 (5.6652)
+Train Task: 1 Epoch: [ 20][200/391]	DTime 0.002	BTime 0.281	Loss 5.4986 (5.6735)
+Train Task: 1 Epoch: [ 20][300/391]	DTime 0.001	BTime 0.281	Loss 5.5813 (5.6721)
+Train Task: 1 Epoch: [ 21][  0/391]	DTime 0.313	BTime 0.598	Loss 5.5977 (5.5977)
+Train Task: 1 Epoch: [ 21][100/391]	DTime 0.003	BTime 0.283	Loss 5.7669 (5.5856)
+Train Task: 1 Epoch: [ 21][200/391]	DTime 0.002	BTime 0.281	Loss 5.8236 (5.6200)
+Train Task: 1 Epoch: [ 21][300/391]	DTime 0.001	BTime 0.281	Loss 5.4766 (5.6393)
+Train Task: 1 Epoch: [ 22][  0/391]	DTime 0.301	BTime 0.587	Loss 5.1560 (5.1560)
+Train Task: 1 Epoch: [ 22][100/391]	DTime 0.003	BTime 0.283	Loss 5.4779 (5.5509)
+Train Task: 1 Epoch: [ 22][200/391]	DTime 0.002	BTime 0.281	Loss 5.4893 (5.5424)
+Train Task: 1 Epoch: [ 22][300/391]	DTime 0.001	BTime 0.281	Loss 5.7526 (5.5374)
+Train Task: 1 Epoch: [ 23][  0/391]	DTime 0.306	BTime 0.595	Loss 5.4758 (5.4758)
+Train Task: 1 Epoch: [ 23][100/391]	DTime 0.003	BTime 0.283	Loss 5.4675 (5.4758)
+Train Task: 1 Epoch: [ 23][200/391]	DTime 0.002	BTime 0.281	Loss 5.2724 (5.4801)
+Train Task: 1 Epoch: [ 23][300/391]	DTime 0.001	BTime 0.280	Loss 5.5123 (5.4867)
+Train Task: 1 Epoch: [ 24][  0/391]	DTime 0.313	BTime 0.602	Loss 5.2279 (5.2279)
+Train Task: 1 Epoch: [ 24][100/391]	DTime 0.003	BTime 0.283	Loss 5.4558 (5.4339)
+Train Task: 1 Epoch: [ 24][200/391]	DTime 0.002	BTime 0.281	Loss 5.2445 (5.4419)
+Train Task: 1 Epoch: [ 24][300/391]	DTime 0.001	BTime 0.281	Loss 5.6196 (5.4457)
+Train Task: 1 Epoch: [ 25][  0/391]	DTime 0.307	BTime 0.595	Loss 5.5195 (5.5195)
+Train Task: 1 Epoch: [ 25][100/391]	DTime 0.003	BTime 0.283	Loss 5.5197 (5.4356)
+Train Task: 1 Epoch: [ 25][200/391]	DTime 0.002	BTime 0.281	Loss 5.4074 (5.4477)
+Train Task: 1 Epoch: [ 25][300/391]	DTime 0.001	BTime 0.281	Loss 5.2915 (5.4462)
+Train Task: 1 Epoch: [ 26][  0/391]	DTime 0.291	BTime 0.582	Loss 5.6320 (5.6320)
+Train Task: 1 Epoch: [ 26][100/391]	DTime 0.003	BTime 0.282	Loss 5.6551 (5.4298)
+Train Task: 1 Epoch: [ 26][200/391]	DTime 0.002	BTime 0.281	Loss 5.2528 (5.4276)
+Train Task: 1 Epoch: [ 26][300/391]	DTime 0.001	BTime 0.280	Loss 5.2855 (5.4356)
+Train Task: 1 Epoch: [ 27][  0/391]	DTime 0.294	BTime 0.581	Loss 5.3645 (5.3645)
+Train Task: 1 Epoch: [ 27][100/391]	DTime 0.003	BTime 0.283	Loss 5.5547 (5.3823)
+Train Task: 1 Epoch: [ 27][200/391]	DTime 0.002	BTime 0.281	Loss 5.3093 (5.3927)
+Train Task: 1 Epoch: [ 27][300/391]	DTime 0.001	BTime 0.281	Loss 5.4777 (5.4018)
+Train Task: 1 Epoch: [ 28][  0/391]	DTime 0.275	BTime 0.561	Loss 5.6607 (5.6607)
+Train Task: 1 Epoch: [ 28][100/391]	DTime 0.003	BTime 0.282	Loss 5.2602 (5.3985)
+Train Task: 1 Epoch: [ 28][200/391]	DTime 0.002	BTime 0.281	Loss 5.4231 (5.3742)
+Train Task: 1 Epoch: [ 28][300/391]	DTime 0.001	BTime 0.280	Loss 5.4509 (5.3608)
+Train Task: 1 Epoch: [ 29][  0/391]	DTime 0.274	BTime 0.554	Loss 5.2394 (5.2394)
+Train Task: 1 Epoch: [ 29][100/391]	DTime 0.003	BTime 0.282	Loss 5.1111 (5.2886)
+Train Task: 1 Epoch: [ 29][200/391]	DTime 0.002	BTime 0.281	Loss 5.2117 (5.2966)
+Train Task: 1 Epoch: [ 29][300/391]	DTime 0.001	BTime 0.280	Loss 5.1781 (5.3012)
+Train Task: 1 Epoch: [ 30][  0/391]	DTime 0.277	BTime 0.561	Loss 5.2600 (5.2600)
+Train Task: 1 Epoch: [ 30][100/391]	DTime 0.003	BTime 0.282	Loss 5.2458 (5.2431)
+Train Task: 1 Epoch: [ 30][200/391]	DTime 0.002	BTime 0.281	Loss 5.5382 (5.2624)
+Train Task: 1 Epoch: [ 30][300/391]	DTime 0.001	BTime 0.280	Loss 4.9219 (5.2644)
+Train Task: 1 Epoch: [ 31][  0/391]	DTime 0.304	BTime 0.587	Loss 5.2963 (5.2963)
+Train Task: 1 Epoch: [ 31][100/391]	DTime 0.003	BTime 0.282	Loss 5.6965 (5.2404)
+Train Task: 1 Epoch: [ 31][200/391]	DTime 0.002	BTime 0.281	Loss 5.2814 (5.2516)
+Train Task: 1 Epoch: [ 31][300/391]	DTime 0.001	BTime 0.280	Loss 5.2481 (5.2604)
+Train Task: 1 Epoch: [ 32][  0/391]	DTime 0.317	BTime 0.601	Loss 5.0713 (5.0713)
+Train Task: 1 Epoch: [ 32][100/391]	DTime 0.003	BTime 0.282	Loss 5.0265 (5.2164)
+Train Task: 1 Epoch: [ 32][200/391]	DTime 0.002	BTime 0.281	Loss 5.2621 (5.2390)
+Train Task: 1 Epoch: [ 32][300/391]	DTime 0.001	BTime 0.280	Loss 5.2424 (5.2434)
+Train Task: 1 Epoch: [ 33][  0/391]	DTime 0.298	BTime 0.584	Loss 5.2269 (5.2269)
+Train Task: 1 Epoch: [ 33][100/391]	DTime 0.003	BTime 0.283	Loss 5.0612 (5.2424)
+Train Task: 1 Epoch: [ 33][200/391]	DTime 0.002	BTime 0.281	Loss 5.1525 (5.2484)
+Train Task: 1 Epoch: [ 33][300/391]	DTime 0.001	BTime 0.280	Loss 5.2022 (5.2473)
+Train Task: 1 Epoch: [ 34][  0/391]	DTime 0.301	BTime 0.588	Loss 5.3350 (5.3350)
+Train Task: 1 Epoch: [ 34][100/391]	DTime 0.003	BTime 0.283	Loss 5.0709 (5.1697)
+Train Task: 1 Epoch: [ 34][200/391]	DTime 0.002	BTime 0.281	Loss 5.2167 (5.1929)
+Train Task: 1 Epoch: [ 34][300/391]	DTime 0.001	BTime 0.280	Loss 5.1411 (5.2105)
+Train Task: 1 Epoch: [ 35][  0/391]	DTime 0.298	BTime 0.584	Loss 5.0634 (5.0634)
+Train Task: 1 Epoch: [ 35][100/391]	DTime 0.003	BTime 0.282	Loss 5.6138 (5.1470)
+Train Task: 1 Epoch: [ 35][200/391]	DTime 0.002	BTime 0.281	Loss 5.5051 (5.1560)
+Train Task: 1 Epoch: [ 35][300/391]	DTime 0.001	BTime 0.280	Loss 5.3618 (5.1696)
+Train Task: 1 Epoch: [ 36][  0/391]	DTime 0.302	BTime 0.591	Loss 5.1775 (5.1775)
+Train Task: 1 Epoch: [ 36][100/391]	DTime 0.003	BTime 0.282	Loss 5.0965 (5.1045)
+Train Task: 1 Epoch: [ 36][200/391]	DTime 0.002	BTime 0.281	Loss 5.1044 (5.1343)
+Train Task: 1 Epoch: [ 36][300/391]	DTime 0.001	BTime 0.280	Loss 5.1631 (5.1375)
+Train Task: 1 Epoch: [ 37][  0/391]	DTime 0.293	BTime 0.581	Loss 4.9271 (4.9271)
+Train Task: 1 Epoch: [ 37][100/391]	DTime 0.003	BTime 0.282	Loss 4.9727 (5.0998)
+Train Task: 1 Epoch: [ 37][200/391]	DTime 0.002	BTime 0.281	Loss 5.0801 (5.0980)
+Train Task: 1 Epoch: [ 37][300/391]	DTime 0.001	BTime 0.280	Loss 4.8913 (5.1121)
+Train Task: 1 Epoch: [ 38][  0/391]	DTime 0.306	BTime 0.593	Loss 5.1514 (5.1514)
+Train Task: 1 Epoch: [ 38][100/391]	DTime 0.003	BTime 0.283	Loss 5.2145 (5.0268)
+Train Task: 1 Epoch: [ 38][200/391]	DTime 0.002	BTime 0.281	Loss 4.9454 (5.0544)
+Train Task: 1 Epoch: [ 38][300/391]	DTime 0.001	BTime 0.280	Loss 5.0781 (5.0564)
+Train Task: 1 Epoch: [ 39][  0/391]	DTime 0.321	BTime 0.604	Loss 4.8365 (4.8365)
+Train Task: 1 Epoch: [ 39][100/391]	DTime 0.003	BTime 0.283	Loss 4.9591 (4.9956)
+Train Task: 1 Epoch: [ 39][200/391]	DTime 0.002	BTime 0.281	Loss 4.9082 (5.0053)
+Train Task: 1 Epoch: [ 39][300/391]	DTime 0.001	BTime 0.281	Loss 4.9301 (5.0230)
+Train Task: 1 Epoch: [ 40][  0/391]	DTime 0.301	BTime 0.592	Loss 4.9277 (4.9277)
+Train Task: 1 Epoch: [ 40][100/391]	DTime 0.003	BTime 0.283	Loss 5.0611 (5.0117)
+Train Task: 1 Epoch: [ 40][200/391]	DTime 0.002	BTime 0.281	Loss 4.9123 (5.0013)
+Train Task: 1 Epoch: [ 40][300/391]	DTime 0.001	BTime 0.280	Loss 4.9456 (5.0028)
+Train Task: 1 Epoch: [ 41][  0/391]	DTime 0.291	BTime 0.578	Loss 5.0131 (5.0131)
+Train Task: 1 Epoch: [ 41][100/391]	DTime 0.003	BTime 0.282	Loss 4.7913 (4.9694)
+Train Task: 1 Epoch: [ 41][200/391]	DTime 0.002	BTime 0.281	Loss 4.7076 (4.9668)
+Train Task: 1 Epoch: [ 41][300/391]	DTime 0.001	BTime 0.280	Loss 5.1124 (4.9778)
+Train Task: 1 Epoch: [ 42][  0/391]	DTime 0.309	BTime 0.599	Loss 4.8908 (4.8908)
+Train Task: 1 Epoch: [ 42][100/391]	DTime 0.003	BTime 0.283	Loss 5.1728 (4.9637)
+Train Task: 1 Epoch: [ 42][200/391]	DTime 0.002	BTime 0.281	Loss 4.8711 (4.9749)
+Train Task: 1 Epoch: [ 42][300/391]	DTime 0.001	BTime 0.281	Loss 5.0790 (4.9947)
+Train Task: 1 Epoch: [ 43][  0/391]	DTime 0.300	BTime 0.588	Loss 4.9422 (4.9422)
+Train Task: 1 Epoch: [ 43][100/391]	DTime 0.003	BTime 0.282	Loss 5.0337 (4.9935)
+Train Task: 1 Epoch: [ 43][200/391]	DTime 0.002	BTime 0.281	Loss 4.8998 (4.9887)
+Train Task: 1 Epoch: [ 43][300/391]	DTime 0.001	BTime 0.280	Loss 5.1343 (4.9872)
+Train Task: 1 Epoch: [ 44][  0/391]	DTime 0.304	BTime 0.590	Loss 5.3863 (5.3863)
+Train Task: 1 Epoch: [ 44][100/391]	DTime 0.003	BTime 0.283	Loss 4.8460 (4.9358)
+Train Task: 1 Epoch: [ 44][200/391]	DTime 0.002	BTime 0.281	Loss 5.3752 (4.9779)
+Train Task: 1 Epoch: [ 44][300/391]	DTime 0.001	BTime 0.280	Loss 4.7479 (4.9768)
+Train Task: 1 Epoch: [ 45][  0/391]	DTime 0.275	BTime 0.560	Loss 4.8420 (4.8420)
+Train Task: 1 Epoch: [ 45][100/391]	DTime 0.003	BTime 0.282	Loss 4.8917 (4.9632)
+Train Task: 1 Epoch: [ 45][200/391]	DTime 0.002	BTime 0.281	Loss 5.0447 (4.9757)
+Train Task: 1 Epoch: [ 45][300/391]	DTime 0.001	BTime 0.280	Loss 5.1213 (4.9777)
+Train Task: 1 Epoch: [ 46][  0/391]	DTime 0.310	BTime 0.595	Loss 4.8849 (4.8849)
+Train Task: 1 Epoch: [ 46][100/391]	DTime 0.003	BTime 0.283	Loss 4.9554 (4.9536)
+Train Task: 1 Epoch: [ 46][200/391]	DTime 0.002	BTime 0.281	Loss 5.1050 (4.9756)
+Train Task: 1 Epoch: [ 46][300/391]	DTime 0.001	BTime 0.280	Loss 5.1285 (4.9707)
+Train Task: 1 Epoch: [ 47][  0/391]	DTime 0.312	BTime 0.596	Loss 4.8139 (4.8139)
+Train Task: 1 Epoch: [ 47][100/391]	DTime 0.003	BTime 0.283	Loss 5.1503 (4.8981)
+Train Task: 1 Epoch: [ 47][200/391]	DTime 0.002	BTime 0.281	Loss 5.0902 (4.9202)
+Train Task: 1 Epoch: [ 47][300/391]	DTime 0.001	BTime 0.280	Loss 5.2642 (4.9442)
+Train Task: 1 Epoch: [ 48][  0/391]	DTime 0.302	BTime 0.588	Loss 4.8992 (4.8992)
+Train Task: 1 Epoch: [ 48][100/391]	DTime 0.003	BTime 0.282	Loss 5.0342 (4.9413)
+Train Task: 1 Epoch: [ 48][200/391]	DTime 0.002	BTime 0.281	Loss 5.0094 (4.9513)
+Train Task: 1 Epoch: [ 48][300/391]	DTime 0.001	BTime 0.280	Loss 4.8374 (4.9535)
+Train Task: 1 Epoch: [ 49][  0/391]	DTime 0.273	BTime 0.559	Loss 5.0154 (5.0154)
+Train Task: 1 Epoch: [ 49][100/391]	DTime 0.003	BTime 0.282	Loss 4.7091 (4.9202)
+Train Task: 1 Epoch: [ 49][200/391]	DTime 0.002	BTime 0.281	Loss 4.7770 (4.9281)
+Train Task: 1 Epoch: [ 49][300/391]	DTime 0.001	BTime 0.280	Loss 4.7792 (4.9321)
+Train Task: 1 Epoch: [ 50][  0/391]	DTime 0.290	BTime 0.579	Loss 4.7569 (4.7569)
+Train Task: 1 Epoch: [ 50][100/391]	DTime 0.003	BTime 0.282	Loss 4.9982 (4.8322)
+Train Task: 1 Epoch: [ 50][200/391]	DTime 0.002	BTime 0.281	Loss 5.1685 (4.8496)
+Train Task: 1 Epoch: [ 50][300/391]	DTime 0.001	BTime 0.280	Loss 4.9171 (4.8716)
+Train Task: 1 Epoch: [ 51][  0/391]	DTime 0.306	BTime 0.595	Loss 4.5017 (4.5017)
+Train Task: 1 Epoch: [ 51][100/391]	DTime 0.003	BTime 0.282	Loss 4.8683 (4.8315)
+Train Task: 1 Epoch: [ 51][200/391]	DTime 0.002	BTime 0.281	Loss 4.9868 (4.8600)
+Train Task: 1 Epoch: [ 51][300/391]	DTime 0.001	BTime 0.280	Loss 5.0318 (4.8794)
+Train Task: 1 Epoch: [ 52][  0/391]	DTime 0.288	BTime 0.575	Loss 4.7116 (4.7116)
+Train Task: 1 Epoch: [ 52][100/391]	DTime 0.003	BTime 0.282	Loss 4.7622 (4.8445)
+Train Task: 1 Epoch: [ 52][200/391]	DTime 0.002	BTime 0.281	Loss 5.0131 (4.8538)
+Train Task: 1 Epoch: [ 52][300/391]	DTime 0.001	BTime 0.280	Loss 4.9300 (4.8698)
+Train Task: 1 Epoch: [ 53][  0/391]	DTime 0.297	BTime 0.585	Loss 4.7350 (4.7350)
+Train Task: 1 Epoch: [ 53][100/391]	DTime 0.003	BTime 0.282	Loss 4.7449 (4.8689)
+Train Task: 1 Epoch: [ 53][200/391]	DTime 0.002	BTime 0.281	Loss 4.8193 (4.8652)
+Train Task: 1 Epoch: [ 53][300/391]	DTime 0.001	BTime 0.280	Loss 5.0193 (4.8710)
+Train Task: 1 Epoch: [ 54][  0/391]	DTime 0.301	BTime 0.588	Loss 4.6665 (4.6665)
+Train Task: 1 Epoch: [ 54][100/391]	DTime 0.003	BTime 0.282	Loss 4.9161 (4.8224)
+Train Task: 1 Epoch: [ 54][200/391]	DTime 0.002	BTime 0.281	Loss 5.0356 (4.8489)
+Train Task: 1 Epoch: [ 54][300/391]	DTime 0.001	BTime 0.280	Loss 4.9391 (4.8620)
+Train Task: 1 Epoch: [ 55][  0/391]	DTime 0.302	BTime 0.591	Loss 4.7806 (4.7806)
+Train Task: 1 Epoch: [ 55][100/391]	DTime 0.003	BTime 0.282	Loss 5.0419 (4.8271)
+Train Task: 1 Epoch: [ 55][200/391]	DTime 0.002	BTime 0.281	Loss 4.9039 (4.8527)
+Train Task: 1 Epoch: [ 55][300/391]	DTime 0.001	BTime 0.280	Loss 4.9565 (4.8558)
+Train Task: 1 Epoch: [ 56][  0/391]	DTime 0.295	BTime 0.583	Loss 4.6106 (4.6106)
+Train Task: 1 Epoch: [ 56][100/391]	DTime 0.003	BTime 0.282	Loss 4.8405 (4.8189)
+Train Task: 1 Epoch: [ 56][200/391]	DTime 0.002	BTime 0.281	Loss 5.1241 (4.8393)
+Train Task: 1 Epoch: [ 56][300/391]	DTime 0.001	BTime 0.280	Loss 4.8602 (4.8541)
+Train Task: 1 Epoch: [ 57][  0/391]	DTime 0.296	BTime 0.582	Loss 5.0295 (5.0295)
+Train Task: 1 Epoch: [ 57][100/391]	DTime 0.003	BTime 0.282	Loss 4.6958 (4.8224)
+Train Task: 1 Epoch: [ 57][200/391]	DTime 0.002	BTime 0.281	Loss 4.8862 (4.8386)
+Train Task: 1 Epoch: [ 57][300/391]	DTime 0.001	BTime 0.280	Loss 5.3574 (4.8515)
+Train Task: 1 Epoch: [ 58][  0/391]	DTime 0.293	BTime 0.582	Loss 4.7688 (4.7688)
+Train Task: 1 Epoch: [ 58][100/391]	DTime 0.003	BTime 0.282	Loss 4.7423 (4.8334)
+Train Task: 1 Epoch: [ 58][200/391]	DTime 0.002	BTime 0.281	Loss 4.7183 (4.8207)
+Train Task: 1 Epoch: [ 58][300/391]	DTime 0.001	BTime 0.280	Loss 5.0535 (4.8418)
+Train Task: 1 Epoch: [ 59][  0/391]	DTime 0.303	BTime 0.593	Loss 4.6949 (4.6949)
+Train Task: 1 Epoch: [ 59][100/391]	DTime 0.003	BTime 0.283	Loss 4.8240 (4.8060)
+Train Task: 1 Epoch: [ 59][200/391]	DTime 0.002	BTime 0.281	Loss 4.7951 (4.8352)
+Train Task: 1 Epoch: [ 59][300/391]	DTime 0.001	BTime 0.280	Loss 5.0638 (4.8505)
+Train Task: 1 Epoch: [ 60][  0/391]	DTime 0.275	BTime 0.561	Loss 4.7720 (4.7720)
+Train Task: 1 Epoch: [ 60][100/391]	DTime 0.003	BTime 0.282	Loss 4.7911 (4.8153)
+Train Task: 1 Epoch: [ 60][200/391]	DTime 0.002	BTime 0.281	Loss 4.8431 (4.8409)
+Train Task: 1 Epoch: [ 60][300/391]	DTime 0.001	BTime 0.280	Loss 4.7192 (4.8564)
+Train Acc: 0.877
+Test Acc: 0.880

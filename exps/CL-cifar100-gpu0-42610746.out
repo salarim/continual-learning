@@ -1,0 +1,1853 @@
+Using base prefix '/cvmfs/soft.computecanada.ca/easybuild/software/2017/Core/python/3.7.4'
+New python executable in /localscratch/msalari.42610746.0/continual-learning/venv/bin/python
+Installing setuptools, pip, wheel...
+done.
+Ignoring pip: markers 'python_version < "3"' don't match your environment
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Requirement already up-to-date: pip in ./venv/lib/python3.7/site-packages (19.1.1)
+Ignoring pip: markers 'python_version < "3"' don't match your environment
+Looking in links: /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2, /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+Collecting cycler==0.10.0 (from -r requirements.txt (line 1))
+Collecting future==0.17.1 (from -r requirements.txt (line 2))
+Collecting h5py==2.10.0 (from -r requirements.txt (line 3))
+Collecting kiwisolver==1.1.0 (from -r requirements.txt (line 4))
+Collecting matplotlib==3.2.1 (from -r requirements.txt (line 5))
+Collecting numpy==1.18.1 (from -r requirements.txt (line 6))
+Collecting pandas==1.0.3 (from -r requirements.txt (line 7))
+Collecting Pillow==7.0.0 (from -r requirements.txt (line 8))
+Collecting Pillow-SIMD==7.0.0.post3 (from -r requirements.txt (line 9))
+Collecting pyparsing==2.4.7 (from -r requirements.txt (line 10))
+Collecting python-dateutil==2.8.1 (from -r requirements.txt (line 11))
+Collecting pytz==2019.3 (from -r requirements.txt (line 12))
+Collecting scipy==1.4.1 (from -r requirements.txt (line 13))
+Collecting seaborn==0.10.0 (from -r requirements.txt (line 14))
+Collecting six==1.14.0 (from -r requirements.txt (line 15))
+Collecting termcolor==1.1.0 (from -r requirements.txt (line 16))
+Collecting torch==1.5.0 (from -r requirements.txt (line 17))
+Collecting torchvision==0.6.0 (from -r requirements.txt (line 18))
+Requirement already satisfied: setuptools in ./venv/lib/python3.7/site-packages (from kiwisolver==1.1.0->-r requirements.txt (line 4)) (41.0.1)
+Installing collected packages: six, cycler, future, numpy, h5py, kiwisolver, pyparsing, python-dateutil, matplotlib, pytz, pandas, Pillow, Pillow-SIMD, scipy, seaborn, termcolor, torch, torchvision
+Successfully installed Pillow-7.0.0 Pillow-SIMD-7.0.0.post3 cycler-0.10.0 future-0.17.1 h5py-2.10.0 kiwisolver-1.1.0 matplotlib-3.2.1 numpy-1.18.1 pandas-1.0.3 pyparsing-2.4.7 python-dateutil-2.8.1 pytz-2019.3 scipy-1.4.1 seaborn-0.10.0 six-1.14.0 termcolor-1.1.0 torch-1.5.0 torchvision-0.6.0
+/localscratch/msalari.42610746.0/continual-learning/main.py
+from __future__ import print_function
+import argparse
+import os
+from time import localtime, strftime
+import warnings
+
+import torch
+import torch.backends.cudnn as cudnn
+
+from model import get_model
+from data_utils import DataConfig, DataLoaderConstructor
+from train import train
+from train_triplet import train_triplet
+from train_contrastive import train_contrastive
+from test import test
+from log_utils import makedirs, get_logger
+
+parser = argparse.ArgumentParser(description='PyTorch Longlife Learning')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 128)')
+parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for testing (default: 128)')
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
+                    help='number of epochs to train (default: 100)')
+parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
+                    help='learning rate (default: 0.1)')
+parser.add_argument('--gamma', type=float, default=0.2, metavar='M',
+                    help='Learning rate step gamma (default: 0.2)')
+parser.add_argument('--milestones', type=int, default=[60, 120, 160], nargs='+')
+parser.add_argument('--weight-decay', type=float, default=5e-4,
+                    help='Optimizer weight dacay (default: 5e-4)')
+parser.add_argument('--seed', default=None, type=int,
+                help='seed for initializing training. ')
+parser.add_argument('--log-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before logging training status')
+parser.add_argument('--test-interval', type=int, default=1, metavar='N',
+                    help='how many batches to wait before testing model')
+parser.add_argument('--acc-per-class', action='store_true', default=False,
+                    help='log accuracy of model per class')
+
+parser.add_argument('--save-model', action='store_true', default=False,
+                    help='For Saving the current Model')
+parser.add_argument("--save", type=str, default="experiments/")
+parser.add_argument('--model-type', type=str, default='softmax',
+                    help='choose softmax/triplet/contrastive')
+
+parser.add_argument('--dataset', type=str, default='mnist',
+                    help='Name of dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist')
+parser.add_argument('--unlabeled-dataset', type=str, default='mnist',
+                    help='Name of unlabeled dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist)')
+parser.add_argument('--tasks', type=int, default=2, metavar='N',
+                help='number of tasks (default: 2)')
+parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',
+                help='number of exemplars (default: 0)')
+parser.add_argument('--oversample-ratio', type=float, default=0.0, metavar='M',
+                help='oversampling ratio (default: 0.0')
+
+# device arguments
+parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+                help='number of data loading workers (default: 4)')
+parser.add_argument('--gpu', default=None, type=int,
+                help='GPU id to use.')
+
+
+def main():
+    args = parser.parse_args()
+
+    makedirs(args.save)
+
+    log_file = args.model_type + '-' + str(args.tasks) + '-'
+    if args.oversample_ratio > 0.0:
+        log_file += 'OS-'
+    log_file += strftime("%Y-%m-%d-%H#%M#%S", localtime()) + '-'
+    python_files = [os.path.abspath(f) for f in os.listdir('.') \
+        if os.path.isfile(f) and f.endswith('.py') and f != 'main.py']
+    logger = get_logger(logpath=os.path.join(args.save, log_file),
+     filepath=os.path.abspath(__file__),
+     package_files=python_files)
+
+    logger.info(args)
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        cudnn.deterministic = True
+        warnings.warn('You have chosen to seed training. '
+                      'This will turn on the CUDNN deterministic setting, '
+                      'which can slow down your training considerably! '
+                      'You may see unexpected behavior when restarting '
+                      'from checkpoints.')
+
+    model = get_model(args)
+
+    device = torch.device("cuda:{}".format(args.gpu) if args.gpu is not None else "cpu")
+    if args.gpu is not None:
+        logger.info("Use GPU {} for training".format(args.gpu))
+        model = model.cuda()
+        device = torch.device("cuda:{}".format(args.gpu))
+    elif torch.cuda.device_count() > 0:
+        logger.info("Use {} GPU/GPUs for training".format(torch.cuda.device_count()))
+        model = torch.nn.DataParallel(model).cuda()
+        device = torch.device("cuda")
+    else:
+        logger.info("Use CPU for training")
+        device = torch.device("cpu")
+
+
+    train_loader_creator_config = DataConfig(args, train=True, dataset=args.dataset,
+                                             dataset_type=args.model_type, is_continual=True, 
+                                             batch_size=args.batch_size)
+    train_loader_creator = DataLoaderConstructor(train_loader_creator_config)
+
+    if args.model_type == 'contrastive':
+        train_loader_creator_u_config = DataConfig(args, train=True, dataset=args.unlabeled_dataset,
+                                                   dataset_type=args.model_type, is_continual=False, 
+                                                   batch_size=args.batch_size)
+        train_loader_creator_u = DataLoaderConstructor(train_loader_creator_u_config)
+
+    test_loader_creator_config = DataConfig(args, train=False, dataset=args.dataset,
+                                            dataset_type=args.model_type, is_continual=True, 
+                                            batch_size=args.test_batch_size, exemplar_size=0)
+    test_loader_creator = DataLoaderConstructor(test_loader_creator_config)
+
+    if args.save_model:
+        torch.save(model.state_dict(), "initial.pt")
+
+    args.vis_base_dir = 'plots/' + log_file + '/'
+    if args.model_type == 'softmax':
+        train(args, model, device, train_loader_creator,
+              test_loader_creator, logger)
+        test(args, model, device, test_loader_creator, logger)
+    elif args.model_type == 'triplet':
+        train_triplet(args, model, device, train_loader_creator,
+                      test_loader_creator, logger)
+    elif args.model_type == 'contrastive':
+        train_contrastive(args, model, device, train_loader_creator,
+                          train_loader_creator_u, logger)
+
+
+
+if __name__ == '__main__':
+    main()
+
+/localscratch/msalari.42610746.0/continual-learning/log_utils.py
+import os
+import logging
+
+
+def makedirs(dirname):
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+
+
+def get_logger(logpath, filepath, package_files=[], displaying=True, saving=True, debug=False):
+    logger = logging.getLogger()
+    if debug:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logger.setLevel(level)
+    if saving:
+        info_file_handler = logging.FileHandler(logpath, mode="a")
+        info_file_handler.setLevel(level)
+        logger.addHandler(info_file_handler)
+    if displaying:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        logger.addHandler(console_handler)
+    logger.info(filepath)
+    with open(filepath, "r") as f:
+        logger.info(f.read())
+
+    for f in package_files:
+        logger.info(f)
+        with open(f, "r") as package_f:
+            logger.info(package_f.read())
+
+    return logger
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+/localscratch/msalari.42610746.0/continual-learning/model.py
+from models.simple import SimpleNet
+from models.resnet import resnet18
+
+def get_model(args):
+
+    if args.dataset == 'mnist':
+        model = SimpleNet()
+    elif args.dataset == 'cifar10':
+        model = resnet18(num_classes=10)
+    elif args.dataset == 'cifar100':
+        model = resnet18(num_classes=100)
+    elif args.dataset == 'imagenet':
+        model = resnet18(num_classes=1000)
+    else:
+        raise ValueError('dataset is not supported.')
+    return model
+
+/localscratch/msalari.42610746.0/continual-learning/test.py
+import torch
+import torch.nn.functional as F
+import numpy as np
+
+from log_utils import AverageMeter
+
+def test(args, model, device, test_loader_creator, logger):
+    model.eval()
+
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+
+    with torch.no_grad():
+        for test_loader in test_loader_creator.data_loaders:
+
+            losses = AverageMeter()
+            acc = AverageMeter()
+
+            for data, target in test_loader:
+
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+
+                loss = criterion(output, target)
+
+                output = output.float()
+                loss = loss.float()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+    logger.info('Test set: Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Acc {acc.avg:.3f}'.format(
+                loss=losses, acc=acc))
+
+    # TODO calculate accuracy per class.
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+/localscratch/msalari.42610746.0/continual-learning/train.py
+import time
+from termcolor import cprint
+
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+
+from test import test, accuracy
+from log_utils import AverageMeter
+# from visualize import plot_embedding_tsne
+
+def train(args, model, device, train_loader_creator, test_loader_creator, logger):   
+
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,args.epochs+1):
+            
+            model.train()
+            losses = AverageMeter()
+            acc = AverageMeter()
+            batch_time = AverageMeter()
+            data_time = AverageMeter()
+
+            end = time.time()
+            for batch_idx, (data, target) in enumerate(train_loader):
+                data_time.update(time.time() - end)
+
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
+
+                output = model(data)
+
+                loss = criterion(output, target)
+
+                loss.backward()                
+                optimizer.step()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+                batch_time.update(time.time() - end)
+                end = time.time()
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
+                        'DTime {data_time.avg:.3f}\t'
+                        'BTime {batch_time.avg:.3f}\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader),
+                            batch_time=batch_time, data_time=data_time, loss=losses, acc=acc))
+
+            scheduler.step()
+            if epoch % args.test_interval == 0:
+                test(args, model, device, test_loader_creator, logger)
+
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42610746.0/continual-learning/train_contrastive.py
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+from termcolor import cprint
+
+from log_utils import AverageMeter
+from models.contrastive_wrapper import ProjectiveWrapper
+from optim import ContrastiveLoss
+# from visualize import plot_embedding_tsne
+
+def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, logger):   
+    proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07) # TODO
+    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    train_loaders_l = train_loader_creator_l.data_loaders
+    train_loaders_u = train_loader_creator_u.data_loaders
+    for task_idx, (train_loader_l, train_loader_u) in enumerate(zip(train_loaders_l, train_loaders_u)):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,args.epochs+1):
+            
+            model.train()
+            losses = AverageMeter()
+
+            for batch_idx, ((data_l_1, data_l_2, target), (data_u_1, data_u_2, _)) \
+                in enumerate(zip(train_loader_l, train_loader_u)):
+
+                data_l_1, data_l_2, target = data_l_1.to(device), data_l_2.to(device), target.to(device)
+                data_u_1, data_u_2 = data_u_1.to(device), data_u_2.to(device)
+                optimizer.zero_grad()
+
+                output_l_1, output_l_2 = proj_model(data_l_1), proj_model(data_l_2)
+                output_u_1, output_u_2 = proj_model(data_u_1), proj_model(data_u_2)
+
+                loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
+
+                loss.backward()                
+                optimizer.step()
+
+                losses.update(loss.item(), data_l_1.size(0))
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {0} Epoch: [{1}][{2}/{3}]\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader_l),
+                            loss=losses))
+
+            scheduler.step()
+
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42610746.0/continual-learning/train_triplet.py
+import torch
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import MultiStepLR
+from termcolor import cprint
+
+from test import test
+from optim import triplet_loss
+# from visualize import plot_embedding_tsne
+
+def train_triplet(args, model, device, train_loader_creator, test_loader_creator, logger):   
+    model.train()
+
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+                          momentum=0.9, weight_decay=args.weight_decay)
+
+    for task_idx, train_loader in enumerate(train_loader_creator.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,args.epochs+1):
+            for batch_idx, (data, target) in enumerate(train_loader):
+
+                data, target = data.to(device), target.to(device)
+
+                optimizer.zero_grad()
+
+                embeddings = []
+                for i in range(3):
+                    embedding = model.get_embedding(data[:,i])
+                    embeddings.append(embedding)
+                anchor_emb, pos_emb, neg_emb = embeddings[0], embeddings[1], embeddings[2]
+
+                y = torch.FloatTensor(anchor_emb.shape[0]).fill_(-1).to(device)
+                loss = triplet_loss(anchor_emb, pos_emb, neg_emb, y)
+                
+                loss.backward()                
+                optimizer.step()
+                scheduler.step()
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {} Epoch: {} '
+                                '[{:7d}/{:7d} ({:3.0f}%)]\tLoss: {:.6f}'.format(
+                                task_idx+1, epoch, batch_idx * args.batch_size,
+                                len(train_loader.dataset),
+                                100. * (batch_idx * args.batch_size) / len(train_loader.dataset),
+                                loss.item()))
+        
+        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        if args.save_model:
+            model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
+            torch.save(model.state_dict(), model_path)
+
+/localscratch/msalari.42610746.0/continual-learning/visualize.py
+import torch
+import numpy as np
+from tsnecuda import TSNE
+import seaborn as sns
+import matplotlib.pyplot as plt
+from log_utils import makedirs
+
+
+def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
+    embedding_size = model.classifier.in_features
+    X = np.empty((0,embedding_size), dtype=np.float32)
+    targets = np.empty((0))
+    with torch.no_grad():
+        for data_loader in data_loader_creator.data_loaders:
+            for data, target in data_loader:
+                data = data.to(device)
+                if args.model_type == 'triplet':
+                    data = data[:,0]
+                embedding = model.get_embedding(data)
+                embedding = embedding.cpu().detach().numpy()
+                target = target.cpu().detach().numpy()
+                X = np.append(X, embedding, axis=0)
+                targets = np.append(targets, target)
+    
+    X_tsne = TSNE().fit_transform(X)
+
+    dir_name = args.vis_base_dir + 'T' + str(task_id+1) + '/'
+    makedirs(dir_name)
+
+    for t_id, task in enumerate(data_loader_creator.tasks_targets):
+        plt.figure()
+        palette = sns.color_palette("bright", len(task))
+        idx = np.isin(targets, task)
+        sns_plot = sns.scatterplot(X_tsne[idx,0], X_tsne[idx,1], hue=targets[idx], legend='full', palette=palette, s=20)
+        plt.savefig(dir_name + 'T' + str(t_id+1) + '.png')
+
+    plt.figure()
+    palette = sns.color_palette("bright", np.unique(targets).shape[0])
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
+    plt.savefig(dir_name + 'all.png')
+    print('Visualization Ended.')
+
+
+/localscratch/msalari.42610746.0/continual-learning/optim.py
+import torch
+import torch.nn.functional as F
+
+import numpy as np
+
+
+def seprated_softmax_loss(score_mean, target, tasks_targets, task_id):
+    curr_targets = tasks_targets[task_id]
+    prev_targets = []
+    for i in range(task_id):
+        prev_targets.extend(tasks_targets[i])
+    
+    curr_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)
+    prev_mask = torch.zeros(target.size()).type(torch.BoolTensor).to(target.device)
+    for t in curr_targets:
+        curr_mask = curr_mask | (target == t)
+    for t in prev_targets:
+        prev_mask = prev_mask | (target == t)
+    curr_mask = curr_mask.view(curr_mask.shape[0])
+    prev_mask = prev_mask.view(prev_mask.shape[0])
+
+    curr_target = target[curr_mask]
+    curr_score = score_mean[curr_mask]
+    curr_output = F.log_softmax(curr_score, dim=1)
+    prev_target = target[prev_mask]
+    prev_score = score_mean[prev_mask]
+    prev_output = F.log_softmax(prev_score, dim=1)
+
+    loss = F.nll_loss(curr_output, curr_target)
+    if prev_target.shape[0] > 0:
+        loss += F.nll_loss(prev_output, prev_target)
+
+    return loss
+
+
+def triplet_loss(anchor_emb, pos_emb, neg_emb, target, margin=0.02):
+    dist_a = F.pairwise_distance(anchor_emb, pos_emb, 2)
+    dist_b = F.pairwise_distance(anchor_emb, neg_emb, 2)
+    criterion = torch.nn.MarginRankingLoss(margin = margin)
+    loss_triplet = criterion(dist_a, dist_b, target)
+    # loss_embedd = anchor_emb.norm(2) + pos_emb.norm(2) + neg_emb.norm(2)
+    loss = loss_triplet #+ 0.001 * loss_embedd
+    return loss
+
+
+class ContrastiveLoss(torch.nn.Module):
+
+    def __init__(self, device, batch_size_l, batch_size_u, temperature):
+        super(ContrastiveLoss, self).__init__()
+        self.device = device
+        self.batch_size_l = batch_size_l
+        self.batch_size_u = batch_size_u
+        self.batch_size = batch_size_l + batch_size_u
+        self.temperature = temperature
+
+        self._cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
+
+        self.self_sup_negative_mask = self._get_self_sup_negative_mask()
+        self.self_sup_criterion = torch.nn.CrossEntropyLoss(reduction="sum")
+
+    def _get_self_sup_negative_mask(self):
+        diag = np.eye(2 * self.batch_size)
+        l1 = np.eye(2 * self.batch_size,  k=-self.batch_size)
+        l2 = np.eye(2 * self.batch_size, k=self.batch_size)
+        mask = torch.from_numpy((diag + l1 + l2))
+        mask = (1 - mask).type(torch.bool)
+        return mask.to(self.device)
+
+        # l means labeled, u means unlabeled
+    def forward(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        self._update_batch_size(zis_l, zjs_l, zis_u, zjs_u, targets_l)
+        self_sup_representations = torch.cat([zis_l,zis_u,zjs_l,zjs_u], dim=0)
+        self_sup_similarity_matrix = self.cosine_similarity(self_sup_representations, 
+                                                            self_sup_representations)
+
+        self_sup_loss = self._self_sup_loss(self_sup_similarity_matrix)
+
+        sup_similarity_matrix = self_sup_similarity_matrix[:self.batch_size_l, :self.batch_size_l]
+        sup_loss = self._sup_loss(sup_similarity_matrix, targets_l)
+
+        return self_sup_loss + sup_loss
+
+    def _update_batch_size(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
+        assert zis_l.shape[0] == zjs_l.shape[0]
+        assert zis_u.shape[0] == zjs_u.shape[0]
+        assert zis_l.shape[0] == targets_l.shape[0]
+
+        if self.batch_size_l != zis_l.shape[0] or self.batch_size_u != zjs_u.shape[0]:
+            self.batch_size_l = zis_l.shape[0]
+            self.batch_size_u = zjs_u.shape[0]
+            self.batch_size = self.batch_size_l + self.batch_size_u
+            self.self_sup_negative_mask = self._get_self_sup_negative_mask()
+
+    def cosine_similarity(self, x, y):
+        v = self._cosine_similarity(x.unsqueeze(1), y.unsqueeze(0))
+        return v
+
+    def _self_sup_loss(self, similarity_matrix):
+        l_pos = torch.diag(similarity_matrix, self.batch_size)
+        r_pos = torch.diag(similarity_matrix, -self.batch_size)
+        positives = torch.cat([l_pos, r_pos]).view(2 * self.batch_size, 1)
+
+        negatives = similarity_matrix[self.self_sup_negative_mask].view(2 * self.batch_size, -1)
+
+        logits = torch.cat((positives, negatives), dim=1)
+        logits /= self.temperature
+
+        labels = torch.zeros(2 * self.batch_size).to(self.device).long()
+        loss = self.self_sup_criterion(logits, labels)
+
+        return loss / (2 * self.batch_size)
+
+    def _sup_loss(self, similarity_matrix, targets):
+        logits = similarity_matrix / self.temperature
+        logits = self._drop_diagonal(logits)
+
+        pos_targets = self._get_sup_pos_targets(targets)
+        cross_ent = self.cross_entropy(logits, pos_targets)
+
+        loss = cross_ent.sum()
+
+        return loss / self.batch_size_l
+
+    def _get_sup_pos_targets(self, targets):
+        targets_mat = targets.repeat(targets.shape[0], 1)
+        tmp = targets.unsqueeze(dim=1).repeat(1, targets.shape[0])
+        off_diagonal = ~torch.eye(targets.shape[0]).type(torch.bool).to(self.device)
+
+        pos_targets = (targets_mat == tmp) & off_diagonal
+        pos_targets = pos_targets.type(torch.float32)
+
+        pos_targets = self._drop_diagonal(pos_targets)
+
+        return pos_targets.to(self.device)
+
+    def _drop_diagonal(self, x):
+        mask = ~torch.eye(x.shape[0]).type(torch.bool).to(self.device)
+        return x[mask].view(x.shape[0], -1)
+
+    def cross_entropy(self, output, target):
+        m = torch.nn.LogSoftmax(dim=1)
+        logsoftmax = -m(output)
+        logsoftmax[~target.type(torch.bool)] = 0.0
+        logsoftmax = logsoftmax.sum(dim=1)
+        weights = target.sum(dim=1)
+        return logsoftmax / (weights + 1e-8)
+
+/localscratch/msalari.42610746.0/continual-learning/data_utils.py
+import math
+import h5py
+import numpy as np
+from PIL import Image
+
+import torch
+import torchvision
+
+
+class DataConfig:
+
+    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, 
+                 workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
+        
+        self.train = train
+        self.dataset = dataset
+        self.dataset_type = dataset_type
+        self.is_continual = is_continual
+        self.batch_size = batch_size
+
+        self.workers = workers if workers else args.workers
+        self.tasks = tasks if tasks else args.tasks
+        self.exemplar_size = exemplar_size if exemplar_size else args.exemplar_size
+        self.oversample_ratio = oversample_ratio if oversample_ratio else args.oversample_ratio
+
+
+class DataLoaderConstructor:
+
+    def __init__(self, config):
+        self.config = config
+
+        original_data, original_targets = self.get_data_targets(self.config.dataset)
+        transforms = self.get_transforms(self.config.dataset)
+
+        self.tasks_targets, indexes = \
+            self.get_tasks_targets_indexes(original_targets)
+        
+        self.data_loaders = self.create_dataloaders(original_data, original_targets,
+                                                    indexes, transforms)
+
+    def get_data_targets(self, dataset_name):
+        if dataset_name == 'mnist':
+            dataset = torchvision.datasets.MNIST('./data/mnist',
+                                                  train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'cifar10':
+            dataset = torchvision.datasets.CIFAR10('./data/cifar10',
+                                                    train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'cifar100':
+            dataset = torchvision.datasets.CIFAR100('./data/cifar100',
+                                                     train=self.config.train, download=True)
+            data, targets = dataset.data, dataset.targets
+        elif dataset_name == 'imagenet':
+            if self.config.train:
+                file_path = './data/imagenet/imagenet_train_500.h5'
+            else:
+                file_path = './data/imagenet/imagenet_test_100.h5'
+            with h5py.File(file_path, 'r') as f:
+                data, targets = f['data'][:], f['labels'][:]
+        else:
+            raise ValueError('dataset is not supported.')
+            
+        if torch.is_tensor(targets):
+            data = data.numpy()
+            targets = targets.numpy()
+        elif type(targets) == list:
+            data = np.array(data)
+            targets = np.array(targets)
+
+        return data, targets
+
+    def get_transforms(self, dataset_name):
+        means = {
+            'mnist':(0.1307,),
+            'cifar10':(0.485, 0.456, 0.406),
+            'cifar100':(0.5070751592371323, 0.48654887331495095, 0.4409178433670343),
+            'imagenet':(0.485, 0.456, 0.406)
+        }
+        stds = {
+            'mnist':(0.3081,),
+            'cifar10':(0.229, 0.224, 0.225),
+            'cifar100':(0.2673342858792401, 0.2564384629170883, 0.27615047132568404),
+            'imagenet':(0.229, 0.224, 0.225)
+        }
+
+        transforms = []
+        if dataset_name in ['cifar10', 'cifar100', 'imagenet'] and self.config.train:
+            transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
+                                torchvision.transforms.RandomHorizontalFlip()])
+        transforms.extend([torchvision.transforms.ToTensor(),
+                            torchvision.transforms.Normalize(means[dataset_name],
+                                                             stds[dataset_name])])
+        return torchvision.transforms.Compose(transforms)
+
+    def get_tasks_targets_indexes(self, original_targets):
+        if self.config.is_continual:
+            continual_constructor = ContinualIndexConstructor(original_targets, 
+                                                              self.config.train, 
+                                                              self.config.tasks, 
+                                                              self.config.exemplar_size, 
+                                                              self.config.oversample_ratio)
+            tasks_targets = continual_constructor.tasks_targets
+            indexes = continual_constructor.indexes
+        else:
+            tasks_targets = [list(np.unique(original_targets))] * self.config.tasks
+            indexes = []
+            for i in range(self.config.tasks):
+                indexes.append(np.random.permutation(original_targets.shape[0]))
+        
+        return tasks_targets, indexes
+
+    def create_dataloaders(self, data, targets, indexes, transforms):
+        data_loaders = []
+
+        for task_indexes in indexes:
+            if self.config.dataset_type == 'softmax':
+                dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
+            elif self.config.dataset_type == 'triplet':
+                dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
+            elif self.config.dataset_type == 'contrastive':
+                dataset = ContrastiveDataset(data, targets, task_indexes, transform=transforms)
+            
+            kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
+                torch.cuda.device_count() > 0 else {}
+            data_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=self.config.batch_size, shuffle=True, **kwargs)
+            data_loaders.append(data_loader)
+
+        return data_loaders
+
+
+class ContinualIndexConstructor:
+
+    def __init__(self, targets, train, tasks, exemplar_size, oversample_ratio):
+        self.tasks_targets = self.create_tasks_targets(np.unique(targets), tasks)
+
+        data_indexes, exemplars_indexes = self.divide_indexes_into_tasks(targets, exemplar_size)
+
+        if oversample_ratio > 0.0:
+            os_sizes = self.get_os_exemplar_size(data_indexes, exemplars_indexes,
+                                                 oversample_ratio)
+            exemplars_indexes = self.get_oversampled_exemplars(exemplars_indexes, os_sizes)
+        
+        self.indexes = self.combine_data_exemplars(data_indexes, exemplars_indexes)
+
+    def create_tasks_targets(self, unique_targets, ntasks):
+        ntargets_per_task = int(len(unique_targets) / ntasks)
+        ntargets_first_task = ntargets_per_task + len(unique_targets) % ntasks
+        tasks_targets = [unique_targets[:ntargets_first_task]]
+
+        target_idx = ntargets_first_task
+        for i in range(ntasks-1):
+            tasks_targets.append(unique_targets[target_idx: target_idx+ntargets_per_task])
+            target_idx += ntargets_per_task
+
+        return tasks_targets
+
+    def divide_indexes_into_tasks(self, targets, exemplar_size):
+        data_indexes = []
+        exemplars_indexes = []
+
+        for i, task_targets in enumerate(self.tasks_targets):
+            prev_targets = []
+            for prev_tasks_targets in self.tasks_targets[:i]:
+                prev_targets.extend(prev_tasks_targets)
+
+            task_data_indexes = np.empty((0), dtype=np.intc)
+            task_exemplars_indexes = np.empty((0), dtype=np.intc)
+
+            for target in task_targets:
+                task_data_indexes = np.append(task_data_indexes, np.where(targets == target)[0])
+
+            for target in prev_targets:
+                size = int(exemplar_size/len(prev_targets))
+                prev_all_indexes = np.where(targets == target)[0]
+                idx = np.random.randint(prev_all_indexes.shape[0], size=size)
+                target_exemplars_indexes = prev_all_indexes[idx]
+                task_exemplars_indexes = np.append(task_exemplars_indexes, target_exemplars_indexes)
+
+            data_indexes.append(task_data_indexes)
+            exemplars_indexes.append(task_exemplars_indexes)
+        
+        return data_indexes, exemplars_indexes
+
+    def get_os_exemplar_size(self, data_indexes, exemplars_indexes, ratio):
+        os_sizes = []
+        for i in range(len(exemplars_indexes)):
+            data_target_size = len(self.tasks_targets[i])
+            exemplar_target_size = sum([len(x) for x in self.tasks_targets[:i]])
+            data_size = data_indexes[i].shape[0]
+
+            size = int(exemplar_target_size * ratio * (data_size / data_target_size))
+            if exemplars_indexes[i].shape[0] == 0:
+                size = 0
+            os_sizes.append(size)
+        return os_sizes
+    
+    def get_oversampled_exemplars(self, exemplars_indexes, os_sizes):
+        os_exemplars_indexes = []
+
+        for i, exemplar_indexes in enumerate(exemplars_indexes):
+            os_exemplars_indexes_idx = np.random.permutation(min(len(exemplar_indexes),
+                                                             os_sizes[i]))
+            if os_sizes[i] > len(exemplar_indexes):
+                extra_exemplar_indexes_idx = np.random.randint(len(exemplar_indexes),
+                                                       size=os_sizes[i]-len(exemplar_indexes))
+                os_exemplars_indexes_idx = np.append(os_exemplars_indexes_idx,
+                                                     extra_exemplar_indexes_idx)
+
+            os_exemplar_indexes = exemplar_indexes[os_exemplars_indexes_idx]
+            os_exemplars_indexes.append(os_exemplar_indexes)
+        
+        return os_exemplars_indexes
+
+    def combine_data_exemplars(self, data_indexes, exemplars_indexes):
+        indexes = []
+
+        for i in range(len(data_indexes)):
+            task_data_indexes = data_indexes[i]
+            task_exemplars_indexes = exemplars_indexes[i]
+
+            task_indexes = np.append(task_data_indexes, task_exemplars_indexes)
+            perm = np.random.permutation(len(task_indexes))
+            task_indexes = task_indexes[perm]
+
+            indexes.append(task_indexes)
+        
+        return indexes
+
+
+
+class SimpleDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform=None):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        org_idx = self.indexes[idx]
+        img, target = self.data[org_idx], int(self.targets[org_idx])
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img, target
+
+
+class TripletDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform=None):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        self.anchor_idxs, self.pos_idxs, self.neg_idxs = self.create_triplets(targets, indexes)
+
+    def create_triplets(self, targets, indexes):
+        targets = targets[indexes]
+
+        anchor_idxs = np.empty(0, dtype=np.intc)
+        pos_idxs = np.empty(0, dtype=np.intc)
+        neg_idxs = np.empty(0, dtype=np.intc)
+        for target in np.unique(targets):
+            anchor_idx = np.where(targets==target)[0]
+            pos_idx = np.where(targets==target)[0]
+            while np.any((anchor_idx-pos_idx)==0):
+                np.random.shuffle(pos_idx)
+            neg_idx = np.random.choice(np.where(targets!=target)[0], len(anchor_idx), replace=True)
+            anchor_idxs = np.append(anchor_idxs, anchor_idx)
+            pos_idxs = np.append(pos_idxs, pos_idx)
+            neg_idxs = np.append(neg_idxs, neg_idx)
+
+        perm = np.random.permutation(len(anchor_idxs))
+        anchor_idxs = anchor_idxs[perm]
+        pos_idxs = pos_idxs[perm]
+        neg_idxs = neg_idxs[perm]
+
+        return anchor_idxs, pos_idxs, neg_idxs
+
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        anchor_indx = self.indexes[self.anchor_idxs[idx]]
+        pos_idx = self.indexes[self.pos_idxs[idx]]
+        neg_idx = self.indexes[self.neg_idxs[idx]]
+
+        target = int(self.targets[anchor_indx])
+        imgs = [self.data[anchor_indx], self.data[pos_idx], self.data[neg_idx]]
+        for i in range(len(imgs)):
+            mode = 'L' if len(imgs[i].shape) == 2 else 'RGB'
+            imgs[i] = Image.fromarray(imgs[i], mode=mode)
+
+            if self.transform is not None:
+                imgs[i] = self.transform(imgs[i])
+
+        return torch.stack((imgs[0], imgs[1], imgs[2])), target
+
+
+
+class ContrastiveDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data, targets, indexes, transform):
+        self.data = data
+        self.targets = targets
+        self.indexes = indexes
+        self.transform = transform
+        
+    def __len__(self):
+        return len(self.indexes)
+
+    def __getitem__(self, idx):
+        org_idx = self.indexes[idx]
+        img, target = self.data[org_idx], int(self.targets[org_idx])
+        mode = 'L' if len(img.shape) == 2 else 'RGB'
+        img = Image.fromarray(img, mode=mode)
+
+        return self.transform(img), self.transform(img), target
+
+Namespace(acc_per_class=False, batch_size=128, dataset='cifar100', epochs=200, exemplar_size=0, gamma=0.2, gpu=0, log_interval=100, lr=0.1, milestones=[60, 120, 160], model_type='softmax', oversample_ratio=0.0, save='experiments/', save_model=False, seed=None, tasks=1, test_batch_size=128, test_interval=5, unlabeled_dataset='mnist', weight_decay=0.0005, workers=4)
+Use GPU 0 for training
+Files already downloaded and verified
+Files already downloaded and verified
+Train Task: 1 Epoch: [  1][  0/391]	DTime 0.158	BTime 0.285	Loss 4.7433 (4.7433)	Acc 1.562 (1.562)
+Train Task: 1 Epoch: [  1][100/391]	DTime 0.002	BTime 0.085	Loss 4.0580 (4.3945)	Acc 3.906 (4.394)
+Train Task: 1 Epoch: [  1][200/391]	DTime 0.001	BTime 0.084	Loss 3.8807 (4.1733)	Acc 12.500 (6.297)
+Train Task: 1 Epoch: [  1][300/391]	DTime 0.001	BTime 0.083	Loss 3.9734 (4.0468)	Acc 9.375 (7.838)
+Train Task: 1 Epoch: [  2][  0/391]	DTime 0.192	BTime 0.294	Loss 3.3781 (3.3781)	Acc 22.656 (22.656)
+Train Task: 1 Epoch: [  2][100/391]	DTime 0.002	BTime 0.084	Loss 3.4941 (3.5515)	Acc 24.219 (15.060)
+Train Task: 1 Epoch: [  2][200/391]	DTime 0.001	BTime 0.083	Loss 3.4735 (3.4804)	Acc 19.531 (16.274)
+Train Task: 1 Epoch: [  2][300/391]	DTime 0.001	BTime 0.083	Loss 3.3634 (3.4106)	Acc 14.844 (17.309)
+Train Task: 1 Epoch: [  3][  0/391]	DTime 0.175	BTime 0.279	Loss 3.3087 (3.3087)	Acc 18.750 (18.750)
+Train Task: 1 Epoch: [  3][100/391]	DTime 0.002	BTime 0.086	Loss 3.0753 (3.0593)	Acc 21.875 (23.584)
+Train Task: 1 Epoch: [  3][200/391]	DTime 0.001	BTime 0.085	Loss 3.0774 (3.0091)	Acc 21.875 (24.642)
+Train Task: 1 Epoch: [  3][300/391]	DTime 0.001	BTime 0.084	Loss 2.6777 (2.9623)	Acc 26.562 (25.542)
+Train Task: 1 Epoch: [  4][  0/391]	DTime 0.169	BTime 0.275	Loss 2.5399 (2.5399)	Acc 32.812 (32.812)
+Train Task: 1 Epoch: [  4][100/391]	DTime 0.002	BTime 0.085	Loss 2.5168 (2.5877)	Acc 33.594 (32.557)
+Train Task: 1 Epoch: [  4][200/391]	DTime 0.001	BTime 0.084	Loss 2.3341 (2.5395)	Acc 37.500 (33.341)
+Train Task: 1 Epoch: [  4][300/391]	DTime 0.001	BTime 0.084	Loss 2.5709 (2.4999)	Acc 33.594 (34.237)
+Train Task: 1 Epoch: [  5][  0/391]	DTime 0.179	BTime 0.278	Loss 2.1317 (2.1317)	Acc 42.188 (42.188)
+Train Task: 1 Epoch: [  5][100/391]	DTime 0.002	BTime 0.086	Loss 2.2314 (2.2202)	Acc 35.938 (40.037)
+Train Task: 1 Epoch: [  5][200/391]	DTime 0.001	BTime 0.084	Loss 2.2217 (2.1824)	Acc 44.531 (41.305)
+Train Task: 1 Epoch: [  5][300/391]	DTime 0.001	BTime 0.084	Loss 1.9043 (2.1416)	Acc 48.438 (42.226)
+Test set: Loss 2.9399 (2.3366)	Acc 38.920
+Train Task: 1 Epoch: [  6][  0/391]	DTime 0.179	BTime 0.284	Loss 1.9127 (1.9127)	Acc 48.438 (48.438)
+Train Task: 1 Epoch: [  6][100/391]	DTime 0.002	BTime 0.085	Loss 2.0062 (1.9304)	Acc 41.406 (46.326)
+Train Task: 1 Epoch: [  6][200/391]	DTime 0.001	BTime 0.084	Loss 1.8430 (1.9084)	Acc 50.000 (47.120)
+Train Task: 1 Epoch: [  6][300/391]	DTime 0.001	BTime 0.084	Loss 1.6584 (1.9003)	Acc 60.938 (47.648)
+Train Task: 1 Epoch: [  7][  0/391]	DTime 0.187	BTime 0.290	Loss 1.7184 (1.7184)	Acc 51.562 (51.562)
+Train Task: 1 Epoch: [  7][100/391]	DTime 0.002	BTime 0.085	Loss 1.9381 (1.7444)	Acc 44.531 (51.771)
+Train Task: 1 Epoch: [  7][200/391]	DTime 0.001	BTime 0.084	Loss 2.2037 (1.7423)	Acc 47.656 (52.002)
+Train Task: 1 Epoch: [  7][300/391]	DTime 0.001	BTime 0.084	Loss 1.5771 (1.7404)	Acc 53.125 (51.726)
+Train Task: 1 Epoch: [  8][  0/391]	DTime 0.178	BTime 0.283	Loss 1.5922 (1.5922)	Acc 54.688 (54.688)
+Train Task: 1 Epoch: [  8][100/391]	DTime 0.002	BTime 0.084	Loss 1.5274 (1.6205)	Acc 59.375 (54.471)
+Train Task: 1 Epoch: [  8][200/391]	DTime 0.001	BTime 0.083	Loss 1.5133 (1.6207)	Acc 64.062 (54.186)
+Train Task: 1 Epoch: [  8][300/391]	DTime 0.001	BTime 0.083	Loss 1.6535 (1.6311)	Acc 48.438 (54.057)
+Train Task: 1 Epoch: [  9][  0/391]	DTime 0.171	BTime 0.277	Loss 1.6464 (1.6464)	Acc 55.469 (55.469)
+Train Task: 1 Epoch: [  9][100/391]	DTime 0.002	BTime 0.087	Loss 1.6613 (1.5164)	Acc 54.688 (56.938)
+Train Task: 1 Epoch: [  9][200/391]	DTime 0.001	BTime 0.086	Loss 1.5608 (1.5365)	Acc 54.688 (56.336)
+Train Task: 1 Epoch: [  9][300/391]	DTime 0.001	BTime 0.085	Loss 1.5809 (1.5421)	Acc 51.562 (56.190)
+Train Task: 1 Epoch: [ 10][  0/391]	DTime 0.178	BTime 0.283	Loss 1.4842 (1.4842)	Acc 56.250 (56.250)
+Train Task: 1 Epoch: [ 10][100/391]	DTime 0.002	BTime 0.084	Loss 1.2016 (1.4650)	Acc 63.281 (58.261)
+Train Task: 1 Epoch: [ 10][200/391]	DTime 0.001	BTime 0.083	Loss 1.3545 (1.4722)	Acc 63.281 (57.949)
+Train Task: 1 Epoch: [ 10][300/391]	DTime 0.001	BTime 0.083	Loss 1.5566 (1.4759)	Acc 57.812 (57.953)
+Test set: Loss 1.5476 (1.7043)	Acc 53.780
+Train Task: 1 Epoch: [ 11][  0/391]	DTime 0.174	BTime 0.277	Loss 1.4549 (1.4549)	Acc 59.375 (59.375)
+Train Task: 1 Epoch: [ 11][100/391]	DTime 0.002	BTime 0.085	Loss 1.3412 (1.3822)	Acc 57.812 (60.303)
+Train Task: 1 Epoch: [ 11][200/391]	DTime 0.001	BTime 0.083	Loss 1.3443 (1.4054)	Acc 63.281 (59.896)
+Train Task: 1 Epoch: [ 11][300/391]	DTime 0.001	BTime 0.082	Loss 1.5032 (1.4194)	Acc 53.906 (59.559)
+Train Task: 1 Epoch: [ 12][  0/391]	DTime 0.184	BTime 0.281	Loss 1.3589 (1.3589)	Acc 65.625 (65.625)
+Train Task: 1 Epoch: [ 12][100/391]	DTime 0.002	BTime 0.085	Loss 1.4722 (1.3311)	Acc 55.469 (61.518)
+Train Task: 1 Epoch: [ 12][200/391]	DTime 0.001	BTime 0.084	Loss 1.3939 (1.3446)	Acc 60.938 (61.159)
+Train Task: 1 Epoch: [ 12][300/391]	DTime 0.001	BTime 0.084	Loss 1.6068 (1.3657)	Acc 60.938 (60.810)
+Train Task: 1 Epoch: [ 13][  0/391]	DTime 0.183	BTime 0.281	Loss 1.1537 (1.1537)	Acc 64.844 (64.844)
+Train Task: 1 Epoch: [ 13][100/391]	DTime 0.002	BTime 0.084	Loss 1.3464 (1.2995)	Acc 57.812 (62.245)
+Train Task: 1 Epoch: [ 13][200/391]	DTime 0.001	BTime 0.083	Loss 1.2339 (1.3207)	Acc 62.500 (61.901)
+Train Task: 1 Epoch: [ 13][300/391]	DTime 0.001	BTime 0.083	Loss 1.4808 (1.3408)	Acc 57.031 (61.521)
+Train Task: 1 Epoch: [ 14][  0/391]	DTime 0.186	BTime 0.284	Loss 1.1415 (1.1415)	Acc 67.188 (67.188)
+Train Task: 1 Epoch: [ 14][100/391]	DTime 0.002	BTime 0.084	Loss 1.2049 (1.2635)	Acc 67.969 (63.769)
+Train Task: 1 Epoch: [ 14][200/391]	DTime 0.001	BTime 0.084	Loss 1.0815 (1.2884)	Acc 74.219 (63.091)
+Train Task: 1 Epoch: [ 14][300/391]	DTime 0.001	BTime 0.083	Loss 1.2407 (1.3037)	Acc 65.625 (62.736)
+Train Task: 1 Epoch: [ 15][  0/391]	DTime 0.172	BTime 0.275	Loss 1.1101 (1.1101)	Acc 71.875 (71.875)
+Train Task: 1 Epoch: [ 15][100/391]	DTime 0.002	BTime 0.083	Loss 1.4093 (1.2174)	Acc 54.688 (64.550)
+Train Task: 1 Epoch: [ 15][200/391]	DTime 0.001	BTime 0.083	Loss 1.1284 (1.2619)	Acc 65.625 (63.328)
+Train Task: 1 Epoch: [ 15][300/391]	DTime 0.001	BTime 0.083	Loss 1.3683 (1.2820)	Acc 64.062 (62.869)
+Test set: Loss 1.4228 (1.6865)	Acc 55.020
+Train Task: 1 Epoch: [ 16][  0/391]	DTime 0.176	BTime 0.275	Loss 1.2456 (1.2456)	Acc 67.969 (67.969)
+Train Task: 1 Epoch: [ 16][100/391]	DTime 0.002	BTime 0.085	Loss 1.2718 (1.2035)	Acc 59.375 (65.269)
+Train Task: 1 Epoch: [ 16][200/391]	DTime 0.001	BTime 0.084	Loss 0.9407 (1.2297)	Acc 73.438 (64.486)
+Train Task: 1 Epoch: [ 16][300/391]	DTime 0.001	BTime 0.084	Loss 1.2327 (1.2455)	Acc 64.062 (63.943)
+Train Task: 1 Epoch: [ 17][  0/391]	DTime 0.181	BTime 0.280	Loss 0.9156 (0.9156)	Acc 71.094 (71.094)
+Train Task: 1 Epoch: [ 17][100/391]	DTime 0.002	BTime 0.084	Loss 1.1616 (1.1685)	Acc 65.625 (65.873)
+Train Task: 1 Epoch: [ 17][200/391]	DTime 0.001	BTime 0.083	Loss 1.2766 (1.2086)	Acc 62.500 (65.042)
+Train Task: 1 Epoch: [ 17][300/391]	DTime 0.001	BTime 0.083	Loss 1.2267 (1.2348)	Acc 60.156 (64.509)
+Train Task: 1 Epoch: [ 18][  0/391]	DTime 0.189	BTime 0.293	Loss 1.2762 (1.2762)	Acc 61.719 (61.719)
+Train Task: 1 Epoch: [ 18][100/391]	DTime 0.002	BTime 0.086	Loss 1.2630 (1.1494)	Acc 60.938 (66.368)
+Train Task: 1 Epoch: [ 18][200/391]	DTime 0.001	BTime 0.084	Loss 1.1984 (1.1933)	Acc 62.500 (65.345)
+Train Task: 1 Epoch: [ 18][300/391]	DTime 0.001	BTime 0.083	Loss 1.2431 (1.2122)	Acc 64.844 (64.963)
+Train Task: 1 Epoch: [ 19][  0/391]	DTime 0.156	BTime 0.261	Loss 1.2554 (1.2554)	Acc 65.625 (65.625)
+Train Task: 1 Epoch: [ 19][100/391]	DTime 0.002	BTime 0.085	Loss 1.0447 (1.1393)	Acc 71.094 (66.708)
+Train Task: 1 Epoch: [ 19][200/391]	DTime 0.001	BTime 0.084	Loss 1.3543 (1.1594)	Acc 63.281 (66.060)
+Train Task: 1 Epoch: [ 19][300/391]	DTime 0.001	BTime 0.083	Loss 1.0724 (1.1851)	Acc 71.875 (65.607)
+Train Task: 1 Epoch: [ 20][  0/391]	DTime 0.187	BTime 0.283	Loss 1.1178 (1.1178)	Acc 69.531 (69.531)
+Train Task: 1 Epoch: [ 20][100/391]	DTime 0.002	BTime 0.085	Loss 1.0172 (1.1170)	Acc 68.750 (67.427)
+Train Task: 1 Epoch: [ 20][200/391]	DTime 0.001	BTime 0.084	Loss 1.2970 (1.1547)	Acc 60.938 (66.138)
+Train Task: 1 Epoch: [ 20][300/391]	DTime 0.001	BTime 0.084	Loss 1.2295 (1.1715)	Acc 63.281 (65.648)
+Test set: Loss 1.2207 (1.6720)	Acc 56.190
+Train Task: 1 Epoch: [ 21][  0/391]	DTime 0.174	BTime 0.276	Loss 1.1179 (1.1179)	Acc 67.969 (67.969)
+Train Task: 1 Epoch: [ 21][100/391]	DTime 0.002	BTime 0.084	Loss 1.0842 (1.1411)	Acc 68.750 (66.716)
+Train Task: 1 Epoch: [ 21][200/391]	DTime 0.001	BTime 0.083	Loss 1.2746 (1.1631)	Acc 60.938 (66.072)
+Train Task: 1 Epoch: [ 21][300/391]	DTime 0.001	BTime 0.083	Loss 1.0978 (1.1688)	Acc 60.938 (65.885)
+Train Task: 1 Epoch: [ 22][  0/391]	DTime 0.184	BTime 0.287	Loss 1.0097 (1.0097)	Acc 67.188 (67.188)
+Train Task: 1 Epoch: [ 22][100/391]	DTime 0.002	BTime 0.086	Loss 1.1155 (1.0725)	Acc 68.750 (68.131)
+Train Task: 1 Epoch: [ 22][200/391]	DTime 0.001	BTime 0.085	Loss 1.1139 (1.1269)	Acc 67.188 (66.896)
+Train Task: 1 Epoch: [ 22][300/391]	DTime 0.001	BTime 0.085	Loss 1.1886 (1.1525)	Acc 70.312 (66.352)
+Train Task: 1 Epoch: [ 23][  0/391]	DTime 0.185	BTime 0.283	Loss 0.9355 (0.9355)	Acc 74.219 (74.219)
+Train Task: 1 Epoch: [ 23][100/391]	DTime 0.002	BTime 0.086	Loss 1.1377 (1.0713)	Acc 65.625 (68.696)
+Train Task: 1 Epoch: [ 23][200/391]	DTime 0.001	BTime 0.085	Loss 1.1821 (1.1239)	Acc 66.406 (67.137)
+Train Task: 1 Epoch: [ 23][300/391]	DTime 0.001	BTime 0.084	Loss 1.0505 (1.1353)	Acc 67.188 (66.847)
+Train Task: 1 Epoch: [ 24][  0/391]	DTime 0.176	BTime 0.277	Loss 1.0465 (1.0465)	Acc 70.312 (70.312)
+Train Task: 1 Epoch: [ 24][100/391]	DTime 0.002	BTime 0.085	Loss 1.1271 (1.0751)	Acc 67.188 (68.340)
+Train Task: 1 Epoch: [ 24][200/391]	DTime 0.001	BTime 0.084	Loss 1.3830 (1.1016)	Acc 60.156 (67.596)
+Train Task: 1 Epoch: [ 24][300/391]	DTime 0.001	BTime 0.084	Loss 1.1743 (1.1318)	Acc 67.969 (66.832)
+Train Task: 1 Epoch: [ 25][  0/391]	DTime 0.179	BTime 0.262	Loss 1.0212 (1.0212)	Acc 72.656 (72.656)
+Train Task: 1 Epoch: [ 25][100/391]	DTime 0.002	BTime 0.084	Loss 1.1446 (1.0515)	Acc 62.500 (68.967)
+Train Task: 1 Epoch: [ 25][200/391]	DTime 0.001	BTime 0.083	Loss 1.2893 (1.0925)	Acc 64.844 (68.194)
+Train Task: 1 Epoch: [ 25][300/391]	DTime 0.001	BTime 0.084	Loss 1.1484 (1.1088)	Acc 68.750 (67.769)
+Test set: Loss 1.5492 (1.5512)	Acc 58.110
+Train Task: 1 Epoch: [ 26][  0/391]	DTime 0.165	BTime 0.268	Loss 1.0057 (1.0057)	Acc 66.406 (66.406)
+Train Task: 1 Epoch: [ 26][100/391]	DTime 0.002	BTime 0.083	Loss 1.2291 (1.0459)	Acc 65.625 (69.477)
+Train Task: 1 Epoch: [ 26][200/391]	DTime 0.001	BTime 0.083	Loss 1.1012 (1.0806)	Acc 63.281 (68.486)
+Train Task: 1 Epoch: [ 26][300/391]	DTime 0.001	BTime 0.082	Loss 1.0733 (1.1025)	Acc 73.438 (67.756)
+Train Task: 1 Epoch: [ 27][  0/391]	DTime 0.175	BTime 0.275	Loss 1.0201 (1.0201)	Acc 71.875 (71.875)
+Train Task: 1 Epoch: [ 27][100/391]	DTime 0.002	BTime 0.084	Loss 1.2231 (1.0487)	Acc 64.844 (69.315)
+Train Task: 1 Epoch: [ 27][200/391]	DTime 0.001	BTime 0.084	Loss 1.0392 (1.0836)	Acc 69.531 (68.404)
+Train Task: 1 Epoch: [ 27][300/391]	DTime 0.001	BTime 0.084	Loss 1.1171 (1.1001)	Acc 68.750 (67.862)
+Train Task: 1 Epoch: [ 28][  0/391]	DTime 0.174	BTime 0.279	Loss 0.9253 (0.9253)	Acc 72.656 (72.656)
+Train Task: 1 Epoch: [ 28][100/391]	DTime 0.002	BTime 0.086	Loss 1.0300 (1.0217)	Acc 75.000 (69.694)
+Train Task: 1 Epoch: [ 28][200/391]	DTime 0.001	BTime 0.084	Loss 1.2422 (1.0514)	Acc 65.625 (68.948)
+Train Task: 1 Epoch: [ 28][300/391]	DTime 0.001	BTime 0.084	Loss 1.1336 (1.0810)	Acc 67.969 (68.285)
+Train Task: 1 Epoch: [ 29][  0/391]	DTime 0.175	BTime 0.277	Loss 0.9361 (0.9361)	Acc 76.562 (76.562)
+Train Task: 1 Epoch: [ 29][100/391]	DTime 0.002	BTime 0.085	Loss 1.2254 (1.0128)	Acc 66.406 (69.949)
+Train Task: 1 Epoch: [ 29][200/391]	DTime 0.001	BTime 0.084	Loss 1.1744 (1.0458)	Acc 66.406 (69.069)
+Train Task: 1 Epoch: [ 29][300/391]	DTime 0.001	BTime 0.084	Loss 0.9914 (1.0752)	Acc 68.750 (68.420)
+Train Task: 1 Epoch: [ 30][  0/391]	DTime 0.176	BTime 0.281	Loss 0.8541 (0.8541)	Acc 69.531 (69.531)
+Train Task: 1 Epoch: [ 30][100/391]	DTime 0.002	BTime 0.086	Loss 0.9460 (1.0366)	Acc 72.656 (69.284)
+Train Task: 1 Epoch: [ 30][200/391]	DTime 0.001	BTime 0.085	Loss 0.8915 (1.0689)	Acc 76.562 (68.614)
+Train Task: 1 Epoch: [ 30][300/391]	DTime 0.001	BTime 0.084	Loss 0.8866 (1.0795)	Acc 70.312 (68.462)
+Test set: Loss 1.8373 (1.5536)	Acc 58.560
+Train Task: 1 Epoch: [ 31][  0/391]	DTime 0.189	BTime 0.291	Loss 1.1795 (1.1795)	Acc 65.625 (65.625)
+Train Task: 1 Epoch: [ 31][100/391]	DTime 0.002	BTime 0.085	Loss 0.9348 (1.0355)	Acc 73.438 (69.933)
+Train Task: 1 Epoch: [ 31][200/391]	DTime 0.001	BTime 0.084	Loss 1.1301 (1.0567)	Acc 64.062 (69.119)
+Train Task: 1 Epoch: [ 31][300/391]	DTime 0.001	BTime 0.084	Loss 1.0564 (1.0768)	Acc 73.438 (68.688)
+Train Task: 1 Epoch: [ 32][  0/391]	DTime 0.166	BTime 0.271	Loss 1.1480 (1.1480)	Acc 63.281 (63.281)
+Train Task: 1 Epoch: [ 32][100/391]	DTime 0.002	BTime 0.085	Loss 1.0184 (1.0259)	Acc 68.750 (70.305)
+Train Task: 1 Epoch: [ 32][200/391]	DTime 0.001	BTime 0.084	Loss 0.9218 (1.0620)	Acc 71.875 (69.030)
+Train Task: 1 Epoch: [ 32][300/391]	DTime 0.001	BTime 0.084	Loss 1.0079 (1.0697)	Acc 71.094 (68.760)
+Train Task: 1 Epoch: [ 33][  0/391]	DTime 0.170	BTime 0.278	Loss 0.9619 (0.9619)	Acc 67.969 (67.969)
+Train Task: 1 Epoch: [ 33][100/391]	DTime 0.002	BTime 0.086	Loss 1.0317 (1.0181)	Acc 67.969 (69.926)
+Train Task: 1 Epoch: [ 33][200/391]	DTime 0.001	BTime 0.085	Loss 1.2647 (1.0443)	Acc 64.844 (69.100)
+Train Task: 1 Epoch: [ 33][300/391]	DTime 0.001	BTime 0.084	Loss 1.0470 (1.0645)	Acc 67.188 (68.667)
+Train Task: 1 Epoch: [ 34][  0/391]	DTime 0.194	BTime 0.295	Loss 1.0751 (1.0751)	Acc 67.188 (67.188)
+Train Task: 1 Epoch: [ 34][100/391]	DTime 0.002	BTime 0.086	Loss 0.6746 (0.9797)	Acc 82.031 (71.349)
+Train Task: 1 Epoch: [ 34][200/391]	DTime 0.001	BTime 0.084	Loss 0.9861 (1.0430)	Acc 71.875 (69.539)
+Train Task: 1 Epoch: [ 34][300/391]	DTime 0.001	BTime 0.084	Loss 1.0294 (1.0483)	Acc 72.656 (69.420)
+Train Task: 1 Epoch: [ 35][  0/391]	DTime 0.180	BTime 0.278	Loss 1.0505 (1.0505)	Acc 74.219 (74.219)
+Train Task: 1 Epoch: [ 35][100/391]	DTime 0.002	BTime 0.084	Loss 1.1287 (0.9827)	Acc 67.969 (70.684)
+Train Task: 1 Epoch: [ 35][200/391]	DTime 0.001	BTime 0.083	Loss 1.0616 (1.0292)	Acc 70.312 (69.710)
+Train Task: 1 Epoch: [ 35][300/391]	DTime 0.001	BTime 0.083	Loss 1.2060 (1.0513)	Acc 63.281 (69.212)
+Test set: Loss 1.5173 (1.7895)	Acc 53.780
+Train Task: 1 Epoch: [ 36][  0/391]	DTime 0.168	BTime 0.274	Loss 1.0303 (1.0303)	Acc 67.969 (67.969)
+Train Task: 1 Epoch: [ 36][100/391]	DTime 0.002	BTime 0.085	Loss 1.0169 (0.9830)	Acc 64.062 (70.877)
+Train Task: 1 Epoch: [ 36][200/391]	DTime 0.001	BTime 0.084	Loss 1.2583 (1.0303)	Acc 64.844 (69.352)
+Train Task: 1 Epoch: [ 36][300/391]	DTime 0.001	BTime 0.084	Loss 0.9762 (1.0558)	Acc 69.531 (68.685)
+Train Task: 1 Epoch: [ 37][  0/391]	DTime 0.174	BTime 0.279	Loss 0.9952 (0.9952)	Acc 75.000 (75.000)
+Train Task: 1 Epoch: [ 37][100/391]	DTime 0.002	BTime 0.085	Loss 1.2112 (0.9602)	Acc 64.844 (71.844)
+Train Task: 1 Epoch: [ 37][200/391]	DTime 0.001	BTime 0.084	Loss 1.0031 (1.0076)	Acc 71.094 (70.351)
+Train Task: 1 Epoch: [ 37][300/391]	DTime 0.001	BTime 0.084	Loss 1.1307 (1.0398)	Acc 66.406 (69.464)
+Train Task: 1 Epoch: [ 38][  0/391]	DTime 0.176	BTime 0.278	Loss 0.8219 (0.8219)	Acc 75.000 (75.000)
+Train Task: 1 Epoch: [ 38][100/391]	DTime 0.002	BTime 0.085	Loss 1.1348 (0.9552)	Acc 63.281 (70.885)
+Train Task: 1 Epoch: [ 38][200/391]	DTime 0.001	BTime 0.084	Loss 1.0987 (0.9964)	Acc 67.969 (70.106)
+Train Task: 1 Epoch: [ 38][300/391]	DTime 0.001	BTime 0.084	Loss 1.1446 (1.0360)	Acc 67.188 (69.256)
+Train Task: 1 Epoch: [ 39][  0/391]	DTime 0.175	BTime 0.279	Loss 0.7875 (0.7875)	Acc 80.469 (80.469)
+Train Task: 1 Epoch: [ 39][100/391]	DTime 0.002	BTime 0.086	Loss 1.0194 (0.9708)	Acc 75.000 (71.566)
+Train Task: 1 Epoch: [ 39][200/391]	DTime 0.001	BTime 0.085	Loss 1.1090 (1.0009)	Acc 66.406 (70.717)
+Train Task: 1 Epoch: [ 39][300/391]	DTime 0.001	BTime 0.084	Loss 1.2982 (1.0362)	Acc 64.062 (69.780)
+Train Task: 1 Epoch: [ 40][  0/391]	DTime 0.184	BTime 0.283	Loss 1.0407 (1.0407)	Acc 67.188 (67.188)
+Train Task: 1 Epoch: [ 40][100/391]	DTime 0.002	BTime 0.085	Loss 1.0399 (0.9646)	Acc 70.312 (71.929)
+Train Task: 1 Epoch: [ 40][200/391]	DTime 0.001	BTime 0.084	Loss 0.9019 (0.9949)	Acc 73.438 (70.876)
+Train Task: 1 Epoch: [ 40][300/391]	DTime 0.001	BTime 0.084	Loss 1.0613 (1.0339)	Acc 71.094 (69.843)
+Test set: Loss 0.9239 (1.7046)	Acc 56.060
+Train Task: 1 Epoch: [ 41][  0/391]	DTime 0.182	BTime 0.283	Loss 1.0957 (1.0957)	Acc 69.531 (69.531)
+Train Task: 1 Epoch: [ 41][100/391]	DTime 0.002	BTime 0.085	Loss 1.0761 (0.9757)	Acc 69.531 (71.465)
+Train Task: 1 Epoch: [ 41][200/391]	DTime 0.001	BTime 0.084	Loss 0.7985 (0.9924)	Acc 79.688 (70.736)
+Train Task: 1 Epoch: [ 41][300/391]	DTime 0.001	BTime 0.084	Loss 1.2378 (1.0224)	Acc 67.969 (70.027)
+Train Task: 1 Epoch: [ 42][  0/391]	DTime 0.184	BTime 0.275	Loss 1.0205 (1.0205)	Acc 67.188 (67.188)
+Train Task: 1 Epoch: [ 42][100/391]	DTime 0.002	BTime 0.085	Loss 1.0499 (0.9530)	Acc 68.750 (71.550)
+Train Task: 1 Epoch: [ 42][200/391]	DTime 0.001	BTime 0.083	Loss 1.3761 (0.9972)	Acc 58.594 (70.441)
+Train Task: 1 Epoch: [ 42][300/391]	DTime 0.001	BTime 0.083	Loss 1.0062 (1.0184)	Acc 67.969 (69.944)
+Train Task: 1 Epoch: [ 43][  0/391]	DTime 0.176	BTime 0.283	Loss 0.9375 (0.9375)	Acc 71.094 (71.094)
+Train Task: 1 Epoch: [ 43][100/391]	DTime 0.002	BTime 0.086	Loss 1.1824 (0.9517)	Acc 64.844 (72.006)
+Train Task: 1 Epoch: [ 43][200/391]	DTime 0.001	BTime 0.085	Loss 0.9855 (0.9955)	Acc 68.750 (70.670)
+Train Task: 1 Epoch: [ 43][300/391]	DTime 0.001	BTime 0.084	Loss 1.1525 (1.0233)	Acc 66.406 (69.972)
+Train Task: 1 Epoch: [ 44][  0/391]	DTime 0.171	BTime 0.279	Loss 0.9810 (0.9810)	Acc 69.531 (69.531)
+Train Task: 1 Epoch: [ 44][100/391]	DTime 0.002	BTime 0.087	Loss 1.0123 (0.9582)	Acc 67.969 (71.836)
+Train Task: 1 Epoch: [ 44][200/391]	DTime 0.001	BTime 0.084	Loss 1.0595 (0.9909)	Acc 67.969 (70.857)
+Train Task: 1 Epoch: [ 44][300/391]	DTime 0.001	BTime 0.083	Loss 1.1127 (1.0167)	Acc 67.188 (70.209)
+Train Task: 1 Epoch: [ 45][  0/391]	DTime 0.168	BTime 0.273	Loss 0.7291 (0.7291)	Acc 78.125 (78.125)
+Train Task: 1 Epoch: [ 45][100/391]	DTime 0.002	BTime 0.083	Loss 1.1829 (0.9597)	Acc 71.875 (71.867)
+Train Task: 1 Epoch: [ 45][200/391]	DTime 0.001	BTime 0.083	Loss 0.9993 (0.9984)	Acc 71.875 (70.604)
+Train Task: 1 Epoch: [ 45][300/391]	DTime 0.001	BTime 0.083	Loss 1.2035 (1.0107)	Acc 60.938 (70.403)
+Test set: Loss 1.9845 (1.6686)	Acc 55.710
+Train Task: 1 Epoch: [ 46][  0/391]	DTime 0.169	BTime 0.275	Loss 1.0129 (1.0129)	Acc 65.625 (65.625)
+Train Task: 1 Epoch: [ 46][100/391]	DTime 0.002	BTime 0.086	Loss 1.0673 (0.9443)	Acc 69.531 (72.184)
+Train Task: 1 Epoch: [ 46][200/391]	DTime 0.001	BTime 0.085	Loss 0.8846 (0.9820)	Acc 71.875 (71.144)
+Train Task: 1 Epoch: [ 46][300/391]	DTime 0.001	BTime 0.085	Loss 1.1251 (1.0089)	Acc 62.500 (70.219)
+Train Task: 1 Epoch: [ 47][  0/391]	DTime 0.171	BTime 0.277	Loss 0.9765 (0.9765)	Acc 73.438 (73.438)
+Train Task: 1 Epoch: [ 47][100/391]	DTime 0.002	BTime 0.086	Loss 1.2394 (0.9623)	Acc 69.531 (71.287)
+Train Task: 1 Epoch: [ 47][200/391]	DTime 0.001	BTime 0.086	Loss 0.9795 (0.9980)	Acc 74.219 (70.515)
+Train Task: 1 Epoch: [ 47][300/391]	DTime 0.001	BTime 0.085	Loss 1.0508 (1.0166)	Acc 69.531 (70.170)
+Train Task: 1 Epoch: [ 48][  0/391]	DTime 0.186	BTime 0.287	Loss 0.8180 (0.8180)	Acc 75.781 (75.781)
+Train Task: 1 Epoch: [ 48][100/391]	DTime 0.002	BTime 0.086	Loss 0.9172 (0.9371)	Acc 75.781 (72.177)
+Train Task: 1 Epoch: [ 48][200/391]	DTime 0.001	BTime 0.085	Loss 1.0471 (0.9794)	Acc 71.875 (70.884)
+Train Task: 1 Epoch: [ 48][300/391]	DTime 0.001	BTime 0.084	Loss 0.9326 (0.9995)	Acc 71.875 (70.507)
+Train Task: 1 Epoch: [ 49][  0/391]	DTime 0.174	BTime 0.279	Loss 0.7829 (0.7829)	Acc 78.125 (78.125)
+Train Task: 1 Epoch: [ 49][100/391]	DTime 0.002	BTime 0.086	Loss 0.8215 (0.9675)	Acc 75.000 (71.550)
+Train Task: 1 Epoch: [ 49][200/391]	DTime 0.001	BTime 0.085	Loss 0.9972 (0.9900)	Acc 73.438 (71.113)
+Train Task: 1 Epoch: [ 49][300/391]	DTime 0.001	BTime 0.085	Loss 1.2660 (1.0127)	Acc 61.719 (70.294)
+Train Task: 1 Epoch: [ 50][  0/391]	DTime 0.177	BTime 0.287	Loss 0.9569 (0.9569)	Acc 71.875 (71.875)
+Train Task: 1 Epoch: [ 50][100/391]	DTime 0.002	BTime 0.086	Loss 1.0904 (0.9377)	Acc 65.625 (72.563)
+Train Task: 1 Epoch: [ 50][200/391]	DTime 0.001	BTime 0.085	Loss 1.0565 (0.9794)	Acc 69.531 (71.195)
+Train Task: 1 Epoch: [ 50][300/391]	DTime 0.001	BTime 0.085	Loss 1.4361 (1.0088)	Acc 60.156 (70.460)
+Test set: Loss 1.1730 (1.7513)	Acc 56.420
+Train Task: 1 Epoch: [ 51][  0/391]	DTime 0.184	BTime 0.290	Loss 0.9237 (0.9237)	Acc 74.219 (74.219)
+Train Task: 1 Epoch: [ 51][100/391]	DTime 0.002	BTime 0.086	Loss 0.8980 (0.9332)	Acc 73.438 (72.161)
+Train Task: 1 Epoch: [ 51][200/391]	DTime 0.001	BTime 0.085	Loss 0.9081 (0.9689)	Acc 73.438 (71.276)
+Train Task: 1 Epoch: [ 51][300/391]	DTime 0.001	BTime 0.085	Loss 1.2215 (0.9964)	Acc 65.625 (70.606)
+Train Task: 1 Epoch: [ 52][  0/391]	DTime 0.169	BTime 0.277	Loss 0.7709 (0.7709)	Acc 75.781 (75.781)
+Train Task: 1 Epoch: [ 52][100/391]	DTime 0.002	BTime 0.087	Loss 1.0430 (0.9389)	Acc 66.406 (72.208)
+Train Task: 1 Epoch: [ 52][200/391]	DTime 0.001	BTime 0.086	Loss 0.9251 (0.9825)	Acc 77.344 (71.109)
+Train Task: 1 Epoch: [ 52][300/391]	DTime 0.001	BTime 0.085	Loss 1.0195 (0.9957)	Acc 66.406 (70.811)
+Train Task: 1 Epoch: [ 53][  0/391]	DTime 0.175	BTime 0.275	Loss 0.9076 (0.9076)	Acc 70.312 (70.312)
+Train Task: 1 Epoch: [ 53][100/391]	DTime 0.002	BTime 0.085	Loss 1.0831 (0.9502)	Acc 70.312 (72.045)
+Train Task: 1 Epoch: [ 53][200/391]	DTime 0.001	BTime 0.085	Loss 0.8990 (0.9818)	Acc 75.781 (70.861)
+Train Task: 1 Epoch: [ 53][300/391]	DTime 0.001	BTime 0.084	Loss 1.0907 (1.0005)	Acc 65.625 (70.341)
+Train Task: 1 Epoch: [ 54][  0/391]	DTime 0.181	BTime 0.275	Loss 0.7516 (0.7516)	Acc 79.688 (79.688)
+Train Task: 1 Epoch: [ 54][100/391]	DTime 0.002	BTime 0.085	Loss 0.8832 (0.9089)	Acc 79.688 (73.244)
+Train Task: 1 Epoch: [ 54][200/391]	DTime 0.001	BTime 0.085	Loss 0.9766 (0.9560)	Acc 72.656 (71.961)
+Train Task: 1 Epoch: [ 54][300/391]	DTime 0.001	BTime 0.084	Loss 0.9748 (0.9861)	Acc 71.875 (71.065)
+Train Task: 1 Epoch: [ 55][  0/391]	DTime 0.177	BTime 0.261	Loss 0.8468 (0.8468)	Acc 82.031 (82.031)
+Train Task: 1 Epoch: [ 55][100/391]	DTime 0.002	BTime 0.086	Loss 0.9050 (0.9297)	Acc 71.094 (72.625)
+Train Task: 1 Epoch: [ 55][200/391]	DTime 0.001	BTime 0.085	Loss 1.1332 (0.9576)	Acc 67.188 (71.937)
+Train Task: 1 Epoch: [ 55][300/391]	DTime 0.001	BTime 0.085	Loss 0.9696 (0.9928)	Acc 70.312 (70.902)
+Test set: Loss 1.8594 (1.4861)	Acc 60.310
+Train Task: 1 Epoch: [ 56][  0/391]	DTime 0.159	BTime 0.262	Loss 0.8740 (0.8740)	Acc 73.438 (73.438)
+Train Task: 1 Epoch: [ 56][100/391]	DTime 0.002	BTime 0.086	Loss 0.9053 (0.9241)	Acc 75.000 (72.262)
+Train Task: 1 Epoch: [ 56][200/391]	DTime 0.001	BTime 0.085	Loss 0.9552 (0.9606)	Acc 71.094 (71.494)
+Train Task: 1 Epoch: [ 56][300/391]	DTime 0.001	BTime 0.084	Loss 0.8831 (0.9852)	Acc 73.438 (70.785)
+Train Task: 1 Epoch: [ 57][  0/391]	DTime 0.169	BTime 0.271	Loss 0.9984 (0.9984)	Acc 70.312 (70.312)
+Train Task: 1 Epoch: [ 57][100/391]	DTime 0.002	BTime 0.086	Loss 1.1946 (0.9303)	Acc 63.281 (72.610)
+Train Task: 1 Epoch: [ 57][200/391]	DTime 0.001	BTime 0.084	Loss 1.2247 (0.9622)	Acc 66.406 (71.805)
+Train Task: 1 Epoch: [ 57][300/391]	DTime 0.001	BTime 0.084	Loss 1.1247 (0.9900)	Acc 67.188 (70.985)
+Train Task: 1 Epoch: [ 58][  0/391]	DTime 0.182	BTime 0.286	Loss 0.8003 (0.8003)	Acc 77.344 (77.344)
+Train Task: 1 Epoch: [ 58][100/391]	DTime 0.002	BTime 0.086	Loss 0.9659 (0.9327)	Acc 72.656 (72.834)
+Train Task: 1 Epoch: [ 58][200/391]	DTime 0.001	BTime 0.085	Loss 1.1018 (0.9586)	Acc 72.656 (71.824)
+Train Task: 1 Epoch: [ 58][300/391]	DTime 0.001	BTime 0.084	Loss 1.0796 (0.9987)	Acc 67.969 (70.826)
+Train Task: 1 Epoch: [ 59][  0/391]	DTime 0.177	BTime 0.279	Loss 0.9139 (0.9139)	Acc 75.000 (75.000)
+Train Task: 1 Epoch: [ 59][100/391]	DTime 0.002	BTime 0.085	Loss 0.8611 (0.9092)	Acc 75.000 (73.004)
+Train Task: 1 Epoch: [ 59][200/391]	DTime 0.001	BTime 0.085	Loss 0.8675 (0.9640)	Acc 73.438 (71.475)
+Train Task: 1 Epoch: [ 59][300/391]	DTime 0.001	BTime 0.084	Loss 1.2220 (0.9792)	Acc 64.062 (71.187)
+Train Task: 1 Epoch: [ 60][  0/391]	DTime 0.185	BTime 0.290	Loss 0.9086 (0.9086)	Acc 71.094 (71.094)
+Train Task: 1 Epoch: [ 60][100/391]	DTime 0.002	BTime 0.084	Loss 1.0084 (0.9368)	Acc 70.312 (72.355)
+Train Task: 1 Epoch: [ 60][200/391]	DTime 0.001	BTime 0.083	Loss 1.1435 (0.9617)	Acc 67.969 (71.731)
+Train Task: 1 Epoch: [ 60][300/391]	DTime 0.001	BTime 0.084	Loss 1.1395 (0.9902)	Acc 66.406 (70.904)
+Test set: Loss 1.7219 (1.7612)	Acc 55.470
+Train Task: 1 Epoch: [ 61][  0/391]	DTime 0.174	BTime 0.277	Loss 0.8730 (0.8730)	Acc 73.438 (73.438)
+Train Task: 1 Epoch: [ 61][100/391]	DTime 0.002	BTime 0.085	Loss 0.4694 (0.6497)	Acc 85.938 (80.902)
+Train Task: 1 Epoch: [ 61][200/391]	DTime 0.001	BTime 0.085	Loss 0.4053 (0.5884)	Acc 88.281 (82.680)
+Train Task: 1 Epoch: [ 61][300/391]	DTime 0.001	BTime 0.084	Loss 0.3563 (0.5605)	Acc 90.625 (83.480)
+Train Task: 1 Epoch: [ 62][  0/391]	DTime 0.177	BTime 0.281	Loss 0.4189 (0.4189)	Acc 90.625 (90.625)
+Train Task: 1 Epoch: [ 62][100/391]	DTime 0.002	BTime 0.086	Loss 0.4093 (0.3912)	Acc 89.844 (88.699)
+Train Task: 1 Epoch: [ 62][200/391]	DTime 0.001	BTime 0.085	Loss 0.3853 (0.3876)	Acc 89.062 (88.619)
+Train Task: 1 Epoch: [ 62][300/391]	DTime 0.001	BTime 0.085	Loss 0.4259 (0.3868)	Acc 85.938 (88.621)
+Train Task: 1 Epoch: [ 63][  0/391]	DTime 0.176	BTime 0.270	Loss 0.3381 (0.3381)	Acc 89.062 (89.062)
+Train Task: 1 Epoch: [ 63][100/391]	DTime 0.002	BTime 0.086	Loss 0.3593 (0.3174)	Acc 89.844 (90.625)
+Train Task: 1 Epoch: [ 63][200/391]	DTime 0.001	BTime 0.085	Loss 0.4862 (0.3209)	Acc 83.594 (90.539)
+Train Task: 1 Epoch: [ 63][300/391]	DTime 0.001	BTime 0.085	Loss 0.2189 (0.3210)	Acc 95.312 (90.441)
+Train Task: 1 Epoch: [ 64][  0/391]	DTime 0.171	BTime 0.275	Loss 0.2657 (0.2657)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [ 64][100/391]	DTime 0.002	BTime 0.086	Loss 0.2510 (0.2658)	Acc 93.750 (92.327)
+Train Task: 1 Epoch: [ 64][200/391]	DTime 0.001	BTime 0.084	Loss 0.2363 (0.2687)	Acc 92.969 (92.215)
+Train Task: 1 Epoch: [ 64][300/391]	DTime 0.001	BTime 0.084	Loss 0.2544 (0.2754)	Acc 91.406 (91.915)
+Train Task: 1 Epoch: [ 65][  0/391]	DTime 0.183	BTime 0.274	Loss 0.1865 (0.1865)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 65][100/391]	DTime 0.002	BTime 0.085	Loss 0.2189 (0.2345)	Acc 93.750 (93.108)
+Train Task: 1 Epoch: [ 65][200/391]	DTime 0.001	BTime 0.084	Loss 0.2708 (0.2386)	Acc 93.750 (93.043)
+Train Task: 1 Epoch: [ 65][300/391]	DTime 0.001	BTime 0.083	Loss 0.1960 (0.2376)	Acc 94.531 (93.036)
+Test set: Loss 1.2230 (1.0173)	Acc 73.910
+Train Task: 1 Epoch: [ 66][  0/391]	DTime 0.176	BTime 0.277	Loss 0.2435 (0.2435)	Acc 90.625 (90.625)
+Train Task: 1 Epoch: [ 66][100/391]	DTime 0.002	BTime 0.084	Loss 0.1722 (0.2046)	Acc 95.312 (94.129)
+Train Task: 1 Epoch: [ 66][200/391]	DTime 0.001	BTime 0.083	Loss 0.2666 (0.2116)	Acc 92.969 (93.886)
+Train Task: 1 Epoch: [ 66][300/391]	DTime 0.001	BTime 0.082	Loss 0.1923 (0.2149)	Acc 93.750 (93.755)
+Train Task: 1 Epoch: [ 67][  0/391]	DTime 0.190	BTime 0.274	Loss 0.2003 (0.2003)	Acc 90.625 (90.625)
+Train Task: 1 Epoch: [ 67][100/391]	DTime 0.002	BTime 0.087	Loss 0.1106 (0.1864)	Acc 96.875 (94.825)
+Train Task: 1 Epoch: [ 67][200/391]	DTime 0.001	BTime 0.086	Loss 0.2003 (0.1901)	Acc 94.531 (94.741)
+Train Task: 1 Epoch: [ 67][300/391]	DTime 0.001	BTime 0.085	Loss 0.2921 (0.1948)	Acc 92.188 (94.469)
+Train Task: 1 Epoch: [ 68][  0/391]	DTime 0.177	BTime 0.268	Loss 0.1408 (0.1408)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 68][100/391]	DTime 0.002	BTime 0.086	Loss 0.1882 (0.1679)	Acc 95.312 (95.506)
+Train Task: 1 Epoch: [ 68][200/391]	DTime 0.001	BTime 0.085	Loss 0.1814 (0.1712)	Acc 94.531 (95.208)
+Train Task: 1 Epoch: [ 68][300/391]	DTime 0.001	BTime 0.085	Loss 0.2218 (0.1786)	Acc 93.750 (94.908)
+Train Task: 1 Epoch: [ 69][  0/391]	DTime 0.187	BTime 0.290	Loss 0.1206 (0.1206)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [ 69][100/391]	DTime 0.002	BTime 0.086	Loss 0.1598 (0.1601)	Acc 95.312 (95.738)
+Train Task: 1 Epoch: [ 69][200/391]	DTime 0.001	BTime 0.085	Loss 0.1732 (0.1633)	Acc 96.094 (95.585)
+Train Task: 1 Epoch: [ 69][300/391]	DTime 0.001	BTime 0.085	Loss 0.1998 (0.1726)	Acc 92.969 (95.084)
+Train Task: 1 Epoch: [ 70][  0/391]	DTime 0.185	BTime 0.277	Loss 0.1456 (0.1456)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [ 70][100/391]	DTime 0.002	BTime 0.086	Loss 0.1712 (0.1508)	Acc 95.312 (95.900)
+Train Task: 1 Epoch: [ 70][200/391]	DTime 0.001	BTime 0.085	Loss 0.2232 (0.1597)	Acc 89.844 (95.557)
+Train Task: 1 Epoch: [ 70][300/391]	DTime 0.001	BTime 0.084	Loss 0.2431 (0.1701)	Acc 92.969 (95.206)
+Test set: Loss 1.2534 (1.1736)	Acc 71.580
+Train Task: 1 Epoch: [ 71][  0/391]	DTime 0.165	BTime 0.266	Loss 0.2230 (0.2230)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [ 71][100/391]	DTime 0.002	BTime 0.085	Loss 0.1827 (0.1626)	Acc 96.094 (95.599)
+Train Task: 1 Epoch: [ 71][200/391]	DTime 0.001	BTime 0.084	Loss 0.1683 (0.1635)	Acc 94.531 (95.573)
+Train Task: 1 Epoch: [ 71][300/391]	DTime 0.001	BTime 0.084	Loss 0.2702 (0.1676)	Acc 92.188 (95.370)
+Train Task: 1 Epoch: [ 72][  0/391]	DTime 0.172	BTime 0.280	Loss 0.1254 (0.1254)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [ 72][100/391]	DTime 0.002	BTime 0.084	Loss 0.1293 (0.1634)	Acc 95.312 (95.552)
+Train Task: 1 Epoch: [ 72][200/391]	DTime 0.001	BTime 0.083	Loss 0.1664 (0.1665)	Acc 94.531 (95.316)
+Train Task: 1 Epoch: [ 72][300/391]	DTime 0.001	BTime 0.083	Loss 0.4425 (0.1753)	Acc 85.938 (94.991)
+Train Task: 1 Epoch: [ 73][  0/391]	DTime 0.177	BTime 0.282	Loss 0.1338 (0.1338)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [ 73][100/391]	DTime 0.002	BTime 0.087	Loss 0.1785 (0.1698)	Acc 94.531 (95.196)
+Train Task: 1 Epoch: [ 73][200/391]	DTime 0.001	BTime 0.085	Loss 0.3016 (0.1810)	Acc 89.844 (94.640)
+Train Task: 1 Epoch: [ 73][300/391]	DTime 0.001	BTime 0.085	Loss 0.1982 (0.1911)	Acc 95.312 (94.329)
+Train Task: 1 Epoch: [ 74][  0/391]	DTime 0.187	BTime 0.290	Loss 0.2292 (0.2292)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [ 74][100/391]	DTime 0.002	BTime 0.086	Loss 0.1641 (0.1831)	Acc 95.312 (94.856)
+Train Task: 1 Epoch: [ 74][200/391]	DTime 0.001	BTime 0.084	Loss 0.2181 (0.1909)	Acc 92.188 (94.403)
+Train Task: 1 Epoch: [ 74][300/391]	DTime 0.001	BTime 0.084	Loss 0.2312 (0.2008)	Acc 94.531 (94.056)
+Train Task: 1 Epoch: [ 75][  0/391]	DTime 0.175	BTime 0.276	Loss 0.2237 (0.2237)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [ 75][100/391]	DTime 0.002	BTime 0.086	Loss 0.2376 (0.1839)	Acc 93.750 (94.647)
+Train Task: 1 Epoch: [ 75][200/391]	DTime 0.001	BTime 0.085	Loss 0.2816 (0.1926)	Acc 90.625 (94.337)
+Train Task: 1 Epoch: [ 75][300/391]	DTime 0.001	BTime 0.085	Loss 0.2052 (0.2059)	Acc 95.312 (93.921)
+Test set: Loss 0.7179 (1.2513)	Acc 69.840
+Train Task: 1 Epoch: [ 76][  0/391]	DTime 0.168	BTime 0.271	Loss 0.2315 (0.2315)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [ 76][100/391]	DTime 0.002	BTime 0.086	Loss 0.2426 (0.2039)	Acc 92.188 (94.098)
+Train Task: 1 Epoch: [ 76][200/391]	DTime 0.001	BTime 0.085	Loss 0.2300 (0.2062)	Acc 92.188 (94.014)
+Train Task: 1 Epoch: [ 76][300/391]	DTime 0.001	BTime 0.085	Loss 0.2403 (0.2153)	Acc 92.969 (93.659)
+Train Task: 1 Epoch: [ 77][  0/391]	DTime 0.184	BTime 0.287	Loss 0.1621 (0.1621)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 77][100/391]	DTime 0.002	BTime 0.087	Loss 0.2528 (0.1917)	Acc 92.188 (94.245)
+Train Task: 1 Epoch: [ 77][200/391]	DTime 0.001	BTime 0.086	Loss 0.1545 (0.2041)	Acc 96.094 (93.843)
+Train Task: 1 Epoch: [ 77][300/391]	DTime 0.001	BTime 0.085	Loss 0.2307 (0.2167)	Acc 93.750 (93.379)
+Train Task: 1 Epoch: [ 78][  0/391]	DTime 0.170	BTime 0.270	Loss 0.1897 (0.1897)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [ 78][100/391]	DTime 0.002	BTime 0.085	Loss 0.1874 (0.2080)	Acc 95.312 (93.897)
+Train Task: 1 Epoch: [ 78][200/391]	DTime 0.001	BTime 0.084	Loss 0.1920 (0.2086)	Acc 94.531 (93.793)
+Train Task: 1 Epoch: [ 78][300/391]	DTime 0.001	BTime 0.084	Loss 0.2809 (0.2162)	Acc 90.625 (93.529)
+Train Task: 1 Epoch: [ 79][  0/391]	DTime 0.197	BTime 0.288	Loss 0.1668 (0.1668)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 79][100/391]	DTime 0.002	BTime 0.086	Loss 0.1360 (0.1995)	Acc 97.656 (94.268)
+Train Task: 1 Epoch: [ 79][200/391]	DTime 0.001	BTime 0.084	Loss 0.1968 (0.2057)	Acc 92.188 (94.010)
+Train Task: 1 Epoch: [ 79][300/391]	DTime 0.001	BTime 0.084	Loss 0.1652 (0.2205)	Acc 95.312 (93.415)
+Train Task: 1 Epoch: [ 80][  0/391]	DTime 0.179	BTime 0.274	Loss 0.1735 (0.1735)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 80][100/391]	DTime 0.002	BTime 0.086	Loss 0.1374 (0.2080)	Acc 95.312 (93.835)
+Train Task: 1 Epoch: [ 80][200/391]	DTime 0.001	BTime 0.085	Loss 0.1970 (0.2108)	Acc 93.750 (93.711)
+Train Task: 1 Epoch: [ 80][300/391]	DTime 0.001	BTime 0.085	Loss 0.2313 (0.2258)	Acc 91.406 (93.187)
+Test set: Loss 2.0537 (1.3532)	Acc 67.890
+Train Task: 1 Epoch: [ 81][  0/391]	DTime 0.169	BTime 0.263	Loss 0.2117 (0.2117)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 81][100/391]	DTime 0.002	BTime 0.085	Loss 0.1696 (0.2150)	Acc 94.531 (93.657)
+Train Task: 1 Epoch: [ 81][200/391]	DTime 0.001	BTime 0.084	Loss 0.1757 (0.2139)	Acc 95.312 (93.688)
+Train Task: 1 Epoch: [ 81][300/391]	DTime 0.001	BTime 0.084	Loss 0.2838 (0.2193)	Acc 90.625 (93.459)
+Train Task: 1 Epoch: [ 82][  0/391]	DTime 0.166	BTime 0.273	Loss 0.2336 (0.2336)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 82][100/391]	DTime 0.002	BTime 0.086	Loss 0.2465 (0.2055)	Acc 89.844 (93.920)
+Train Task: 1 Epoch: [ 82][200/391]	DTime 0.001	BTime 0.085	Loss 0.1107 (0.2074)	Acc 98.438 (93.886)
+Train Task: 1 Epoch: [ 82][300/391]	DTime 0.001	BTime 0.084	Loss 0.2386 (0.2156)	Acc 90.625 (93.529)
+Train Task: 1 Epoch: [ 83][  0/391]	DTime 0.183	BTime 0.286	Loss 0.1602 (0.1602)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [ 83][100/391]	DTime 0.002	BTime 0.086	Loss 0.2172 (0.1961)	Acc 92.969 (94.330)
+Train Task: 1 Epoch: [ 83][200/391]	DTime 0.001	BTime 0.085	Loss 0.1902 (0.1979)	Acc 93.750 (94.236)
+Train Task: 1 Epoch: [ 83][300/391]	DTime 0.001	BTime 0.084	Loss 0.1532 (0.2125)	Acc 96.094 (93.727)
+Train Task: 1 Epoch: [ 84][  0/391]	DTime 0.188	BTime 0.286	Loss 0.2042 (0.2042)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [ 84][100/391]	DTime 0.002	BTime 0.085	Loss 0.1550 (0.1970)	Acc 96.094 (94.090)
+Train Task: 1 Epoch: [ 84][200/391]	DTime 0.001	BTime 0.084	Loss 0.2121 (0.2015)	Acc 96.094 (93.902)
+Train Task: 1 Epoch: [ 84][300/391]	DTime 0.001	BTime 0.083	Loss 0.3343 (0.2107)	Acc 88.281 (93.649)
+Train Task: 1 Epoch: [ 85][  0/391]	DTime 0.179	BTime 0.283	Loss 0.1720 (0.1720)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [ 85][100/391]	DTime 0.002	BTime 0.085	Loss 0.1462 (0.1960)	Acc 95.312 (94.377)
+Train Task: 1 Epoch: [ 85][200/391]	DTime 0.001	BTime 0.084	Loss 0.1644 (0.2070)	Acc 95.312 (93.952)
+Train Task: 1 Epoch: [ 85][300/391]	DTime 0.001	BTime 0.084	Loss 0.2860 (0.2105)	Acc 92.188 (93.838)
+Test set: Loss 0.8796 (1.3961)	Acc 67.580
+Train Task: 1 Epoch: [ 86][  0/391]	DTime 0.173	BTime 0.275	Loss 0.1199 (0.1199)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [ 86][100/391]	DTime 0.002	BTime 0.085	Loss 0.2241 (0.2045)	Acc 94.531 (94.098)
+Train Task: 1 Epoch: [ 86][200/391]	DTime 0.001	BTime 0.083	Loss 0.1734 (0.2055)	Acc 95.312 (93.983)
+Train Task: 1 Epoch: [ 86][300/391]	DTime 0.001	BTime 0.083	Loss 0.3760 (0.2110)	Acc 89.062 (93.742)
+Train Task: 1 Epoch: [ 87][  0/391]	DTime 0.173	BTime 0.279	Loss 0.1999 (0.1999)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [ 87][100/391]	DTime 0.002	BTime 0.086	Loss 0.1919 (0.1948)	Acc 95.312 (94.353)
+Train Task: 1 Epoch: [ 87][200/391]	DTime 0.001	BTime 0.085	Loss 0.2198 (0.1979)	Acc 92.969 (94.185)
+Train Task: 1 Epoch: [ 87][300/391]	DTime 0.001	BTime 0.085	Loss 0.2149 (0.2110)	Acc 94.531 (93.766)
+Train Task: 1 Epoch: [ 88][  0/391]	DTime 0.189	BTime 0.284	Loss 0.1907 (0.1907)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [ 88][100/391]	DTime 0.002	BTime 0.086	Loss 0.2745 (0.1909)	Acc 91.406 (94.516)
+Train Task: 1 Epoch: [ 88][200/391]	DTime 0.001	BTime 0.085	Loss 0.1527 (0.2006)	Acc 94.531 (94.045)
+Train Task: 1 Epoch: [ 88][300/391]	DTime 0.001	BTime 0.084	Loss 0.1748 (0.2093)	Acc 96.875 (93.714)
+Train Task: 1 Epoch: [ 89][  0/391]	DTime 0.186	BTime 0.285	Loss 0.1818 (0.1818)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [ 89][100/391]	DTime 0.002	BTime 0.085	Loss 0.2070 (0.2084)	Acc 95.312 (93.928)
+Train Task: 1 Epoch: [ 89][200/391]	DTime 0.001	BTime 0.084	Loss 0.2456 (0.2052)	Acc 92.188 (93.956)
+Train Task: 1 Epoch: [ 89][300/391]	DTime 0.001	BTime 0.083	Loss 0.2258 (0.2172)	Acc 94.531 (93.467)
+Train Task: 1 Epoch: [ 90][  0/391]	DTime 0.174	BTime 0.280	Loss 0.1317 (0.1317)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 90][100/391]	DTime 0.002	BTime 0.085	Loss 0.2450 (0.2057)	Acc 92.188 (94.168)
+Train Task: 1 Epoch: [ 90][200/391]	DTime 0.001	BTime 0.084	Loss 0.1938 (0.2064)	Acc 94.531 (94.053)
+Train Task: 1 Epoch: [ 90][300/391]	DTime 0.001	BTime 0.083	Loss 0.1505 (0.2054)	Acc 96.875 (93.989)
+Test set: Loss 1.4919 (1.3058)	Acc 69.490
+Train Task: 1 Epoch: [ 91][  0/391]	DTime 0.177	BTime 0.273	Loss 0.2114 (0.2114)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [ 91][100/391]	DTime 0.002	BTime 0.085	Loss 0.2332 (0.1864)	Acc 92.188 (94.438)
+Train Task: 1 Epoch: [ 91][200/391]	DTime 0.001	BTime 0.085	Loss 0.2377 (0.1950)	Acc 92.969 (94.146)
+Train Task: 1 Epoch: [ 91][300/391]	DTime 0.001	BTime 0.084	Loss 0.2152 (0.2024)	Acc 93.750 (93.916)
+Train Task: 1 Epoch: [ 92][  0/391]	DTime 0.177	BTime 0.280	Loss 0.1450 (0.1450)	Acc 96.094 (96.094)
+Train Task: 1 Epoch: [ 92][100/391]	DTime 0.002	BTime 0.086	Loss 0.2636 (0.1770)	Acc 89.844 (94.903)
+Train Task: 1 Epoch: [ 92][200/391]	DTime 0.001	BTime 0.085	Loss 0.2458 (0.1880)	Acc 92.969 (94.578)
+Train Task: 1 Epoch: [ 92][300/391]	DTime 0.001	BTime 0.085	Loss 0.2645 (0.1986)	Acc 93.750 (94.163)
+Train Task: 1 Epoch: [ 93][  0/391]	DTime 0.176	BTime 0.273	Loss 0.1923 (0.1923)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [ 93][100/391]	DTime 0.002	BTime 0.085	Loss 0.1466 (0.1659)	Acc 95.312 (95.343)
+Train Task: 1 Epoch: [ 93][200/391]	DTime 0.001	BTime 0.084	Loss 0.1988 (0.1762)	Acc 92.188 (94.974)
+Train Task: 1 Epoch: [ 93][300/391]	DTime 0.001	BTime 0.084	Loss 0.2555 (0.1864)	Acc 92.188 (94.586)
+Train Task: 1 Epoch: [ 94][  0/391]	DTime 0.175	BTime 0.279	Loss 0.1628 (0.1628)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [ 94][100/391]	DTime 0.002	BTime 0.085	Loss 0.2645 (0.1763)	Acc 90.625 (94.825)
+Train Task: 1 Epoch: [ 94][200/391]	DTime 0.001	BTime 0.085	Loss 0.1935 (0.1769)	Acc 95.312 (94.834)
+Train Task: 1 Epoch: [ 94][300/391]	DTime 0.001	BTime 0.084	Loss 0.1913 (0.1865)	Acc 92.188 (94.479)
+Train Task: 1 Epoch: [ 95][  0/391]	DTime 0.168	BTime 0.273	Loss 0.1990 (0.1990)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [ 95][100/391]	DTime 0.002	BTime 0.085	Loss 0.1400 (0.1963)	Acc 96.875 (94.322)
+Train Task: 1 Epoch: [ 95][200/391]	DTime 0.001	BTime 0.084	Loss 0.1977 (0.1984)	Acc 94.531 (94.143)
+Train Task: 1 Epoch: [ 95][300/391]	DTime 0.001	BTime 0.084	Loss 0.2385 (0.2047)	Acc 95.312 (93.960)
+Test set: Loss 2.1850 (1.3958)	Acc 68.530
+Train Task: 1 Epoch: [ 96][  0/391]	DTime 0.180	BTime 0.283	Loss 0.1413 (0.1413)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [ 96][100/391]	DTime 0.002	BTime 0.086	Loss 0.1739 (0.1854)	Acc 95.312 (94.585)
+Train Task: 1 Epoch: [ 96][200/391]	DTime 0.001	BTime 0.085	Loss 0.1667 (0.1929)	Acc 96.875 (94.356)
+Train Task: 1 Epoch: [ 96][300/391]	DTime 0.001	BTime 0.085	Loss 0.2555 (0.2008)	Acc 92.188 (93.991)
+Train Task: 1 Epoch: [ 97][  0/391]	DTime 0.178	BTime 0.280	Loss 0.2247 (0.2247)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [ 97][100/391]	DTime 0.002	BTime 0.086	Loss 0.1875 (0.1896)	Acc 93.750 (94.384)
+Train Task: 1 Epoch: [ 97][200/391]	DTime 0.001	BTime 0.085	Loss 0.2239 (0.1959)	Acc 92.969 (94.100)
+Train Task: 1 Epoch: [ 97][300/391]	DTime 0.001	BTime 0.085	Loss 0.2061 (0.1995)	Acc 94.531 (94.098)
+Train Task: 1 Epoch: [ 98][  0/391]	DTime 0.179	BTime 0.280	Loss 0.1497 (0.1497)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [ 98][100/391]	DTime 0.002	BTime 0.086	Loss 0.1221 (0.1792)	Acc 98.438 (94.949)
+Train Task: 1 Epoch: [ 98][200/391]	DTime 0.001	BTime 0.085	Loss 0.2126 (0.1841)	Acc 93.750 (94.613)
+Train Task: 1 Epoch: [ 98][300/391]	DTime 0.001	BTime 0.085	Loss 0.1854 (0.1963)	Acc 96.875 (94.241)
+Train Task: 1 Epoch: [ 99][  0/391]	DTime 0.186	BTime 0.284	Loss 0.1902 (0.1902)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [ 99][100/391]	DTime 0.002	BTime 0.086	Loss 0.1490 (0.1934)	Acc 96.094 (94.152)
+Train Task: 1 Epoch: [ 99][200/391]	DTime 0.001	BTime 0.084	Loss 0.2105 (0.1970)	Acc 91.406 (94.049)
+Train Task: 1 Epoch: [ 99][300/391]	DTime 0.001	BTime 0.084	Loss 0.2499 (0.2075)	Acc 92.969 (93.734)
+Train Task: 1 Epoch: [100][  0/391]	DTime 0.175	BTime 0.281	Loss 0.1842 (0.1842)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [100][100/391]	DTime 0.002	BTime 0.086	Loss 0.1656 (0.1981)	Acc 96.094 (94.160)
+Train Task: 1 Epoch: [100][200/391]	DTime 0.001	BTime 0.085	Loss 0.2116 (0.1928)	Acc 94.531 (94.345)
+Train Task: 1 Epoch: [100][300/391]	DTime 0.001	BTime 0.085	Loss 0.2201 (0.1962)	Acc 92.969 (94.259)
+Test set: Loss 0.8114 (1.3484)	Acc 69.190
+Train Task: 1 Epoch: [101][  0/391]	DTime 0.175	BTime 0.280	Loss 0.2118 (0.2118)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [101][100/391]	DTime 0.002	BTime 0.086	Loss 0.1862 (0.1692)	Acc 94.531 (95.351)
+Train Task: 1 Epoch: [101][200/391]	DTime 0.001	BTime 0.084	Loss 0.1592 (0.1683)	Acc 95.312 (95.223)
+Train Task: 1 Epoch: [101][300/391]	DTime 0.001	BTime 0.084	Loss 0.1698 (0.1758)	Acc 96.094 (94.889)
+Train Task: 1 Epoch: [102][  0/391]	DTime 0.177	BTime 0.276	Loss 0.1518 (0.1518)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [102][100/391]	DTime 0.002	BTime 0.086	Loss 0.1525 (0.1701)	Acc 96.094 (94.903)
+Train Task: 1 Epoch: [102][200/391]	DTime 0.001	BTime 0.085	Loss 0.1436 (0.1763)	Acc 95.312 (94.823)
+Train Task: 1 Epoch: [102][300/391]	DTime 0.001	BTime 0.085	Loss 0.2513 (0.1873)	Acc 92.969 (94.547)
+Train Task: 1 Epoch: [103][  0/391]	DTime 0.184	BTime 0.286	Loss 0.2628 (0.2628)	Acc 90.625 (90.625)
+Train Task: 1 Epoch: [103][100/391]	DTime 0.002	BTime 0.086	Loss 0.1846 (0.1633)	Acc 94.531 (95.181)
+Train Task: 1 Epoch: [103][200/391]	DTime 0.001	BTime 0.085	Loss 0.1594 (0.1703)	Acc 95.312 (95.013)
+Train Task: 1 Epoch: [103][300/391]	DTime 0.001	BTime 0.085	Loss 0.1097 (0.1783)	Acc 98.438 (94.814)
+Train Task: 1 Epoch: [104][  0/391]	DTime 0.175	BTime 0.277	Loss 0.1961 (0.1961)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [104][100/391]	DTime 0.002	BTime 0.086	Loss 0.1630 (0.1977)	Acc 95.312 (94.307)
+Train Task: 1 Epoch: [104][200/391]	DTime 0.001	BTime 0.085	Loss 0.2003 (0.1943)	Acc 92.969 (94.384)
+Train Task: 1 Epoch: [104][300/391]	DTime 0.001	BTime 0.085	Loss 0.2833 (0.1982)	Acc 90.625 (94.235)
+Train Task: 1 Epoch: [105][  0/391]	DTime 0.182	BTime 0.282	Loss 0.1256 (0.1256)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [105][100/391]	DTime 0.002	BTime 0.085	Loss 0.2197 (0.1843)	Acc 92.969 (94.756)
+Train Task: 1 Epoch: [105][200/391]	DTime 0.001	BTime 0.084	Loss 0.1432 (0.1773)	Acc 96.875 (94.912)
+Train Task: 1 Epoch: [105][300/391]	DTime 0.001	BTime 0.084	Loss 0.2192 (0.1858)	Acc 92.188 (94.612)
+Test set: Loss 2.5780 (1.3632)	Acc 68.550
+Train Task: 1 Epoch: [106][  0/391]	DTime 0.181	BTime 0.285	Loss 0.1862 (0.1862)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [106][100/391]	DTime 0.002	BTime 0.085	Loss 0.1760 (0.1732)	Acc 94.531 (94.926)
+Train Task: 1 Epoch: [106][200/391]	DTime 0.001	BTime 0.084	Loss 0.2305 (0.1842)	Acc 94.531 (94.539)
+Train Task: 1 Epoch: [106][300/391]	DTime 0.001	BTime 0.084	Loss 0.2119 (0.1928)	Acc 93.750 (94.228)
+Train Task: 1 Epoch: [107][  0/391]	DTime 0.177	BTime 0.281	Loss 0.1623 (0.1623)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [107][100/391]	DTime 0.002	BTime 0.084	Loss 0.2341 (0.1696)	Acc 92.188 (95.096)
+Train Task: 1 Epoch: [107][200/391]	DTime 0.001	BTime 0.084	Loss 0.1863 (0.1761)	Acc 96.094 (94.904)
+Train Task: 1 Epoch: [107][300/391]	DTime 0.001	BTime 0.084	Loss 0.2116 (0.1804)	Acc 92.969 (94.757)
+Train Task: 1 Epoch: [108][  0/391]	DTime 0.165	BTime 0.261	Loss 0.1604 (0.1604)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [108][100/391]	DTime 0.002	BTime 0.085	Loss 0.1851 (0.1788)	Acc 96.094 (94.763)
+Train Task: 1 Epoch: [108][200/391]	DTime 0.001	BTime 0.084	Loss 0.1974 (0.1781)	Acc 92.969 (94.788)
+Train Task: 1 Epoch: [108][300/391]	DTime 0.001	BTime 0.084	Loss 0.1074 (0.1817)	Acc 99.219 (94.736)
+Train Task: 1 Epoch: [109][  0/391]	DTime 0.163	BTime 0.264	Loss 0.1232 (0.1232)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [109][100/391]	DTime 0.002	BTime 0.086	Loss 0.2632 (0.1632)	Acc 89.062 (95.297)
+Train Task: 1 Epoch: [109][200/391]	DTime 0.001	BTime 0.085	Loss 0.2019 (0.1697)	Acc 94.531 (95.079)
+Train Task: 1 Epoch: [109][300/391]	DTime 0.001	BTime 0.085	Loss 0.1451 (0.1812)	Acc 94.531 (94.731)
+Train Task: 1 Epoch: [110][  0/391]	DTime 0.168	BTime 0.271	Loss 0.1999 (0.1999)	Acc 94.531 (94.531)
+Train Task: 1 Epoch: [110][100/391]	DTime 0.002	BTime 0.085	Loss 0.2033 (0.1804)	Acc 91.406 (94.848)
+Train Task: 1 Epoch: [110][200/391]	DTime 0.001	BTime 0.084	Loss 0.1843 (0.1789)	Acc 95.312 (94.893)
+Train Task: 1 Epoch: [110][300/391]	DTime 0.001	BTime 0.084	Loss 0.2529 (0.1866)	Acc 91.406 (94.612)
+Test set: Loss 2.2759 (1.3403)	Acc 69.150
+Train Task: 1 Epoch: [111][  0/391]	DTime 0.177	BTime 0.273	Loss 0.2193 (0.2193)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [111][100/391]	DTime 0.002	BTime 0.083	Loss 0.0937 (0.1860)	Acc 99.219 (94.601)
+Train Task: 1 Epoch: [111][200/391]	DTime 0.001	BTime 0.083	Loss 0.1580 (0.1790)	Acc 96.094 (94.827)
+Train Task: 1 Epoch: [111][300/391]	DTime 0.001	BTime 0.083	Loss 0.1665 (0.1911)	Acc 94.531 (94.448)
+Train Task: 1 Epoch: [112][  0/391]	DTime 0.174	BTime 0.275	Loss 0.1188 (0.1188)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [112][100/391]	DTime 0.002	BTime 0.085	Loss 0.0973 (0.1656)	Acc 96.875 (95.359)
+Train Task: 1 Epoch: [112][200/391]	DTime 0.001	BTime 0.085	Loss 0.3606 (0.1728)	Acc 91.406 (95.029)
+Train Task: 1 Epoch: [112][300/391]	DTime 0.001	BTime 0.084	Loss 0.2263 (0.1828)	Acc 92.969 (94.697)
+Train Task: 1 Epoch: [113][  0/391]	DTime 0.172	BTime 0.277	Loss 0.1543 (0.1543)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [113][100/391]	DTime 0.002	BTime 0.086	Loss 0.2005 (0.1691)	Acc 93.750 (95.104)
+Train Task: 1 Epoch: [113][200/391]	DTime 0.001	BTime 0.085	Loss 0.1302 (0.1700)	Acc 96.875 (95.118)
+Train Task: 1 Epoch: [113][300/391]	DTime 0.001	BTime 0.084	Loss 0.1548 (0.1776)	Acc 95.312 (94.902)
+Train Task: 1 Epoch: [114][  0/391]	DTime 0.179	BTime 0.287	Loss 0.1375 (0.1375)	Acc 97.656 (97.656)
+Train Task: 1 Epoch: [114][100/391]	DTime 0.002	BTime 0.085	Loss 0.2454 (0.1737)	Acc 92.188 (95.065)
+Train Task: 1 Epoch: [114][200/391]	DTime 0.001	BTime 0.084	Loss 0.1957 (0.1776)	Acc 95.312 (94.978)
+Train Task: 1 Epoch: [114][300/391]	DTime 0.001	BTime 0.084	Loss 0.1804 (0.1806)	Acc 96.875 (94.804)
+Train Task: 1 Epoch: [115][  0/391]	DTime 0.176	BTime 0.270	Loss 0.1532 (0.1532)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [115][100/391]	DTime 0.002	BTime 0.087	Loss 0.1967 (0.1789)	Acc 95.312 (94.709)
+Train Task: 1 Epoch: [115][200/391]	DTime 0.001	BTime 0.086	Loss 0.2153 (0.1730)	Acc 93.750 (95.017)
+Train Task: 1 Epoch: [115][300/391]	DTime 0.001	BTime 0.085	Loss 0.2125 (0.1813)	Acc 95.312 (94.817)
+Test set: Loss 1.0118 (1.3885)	Acc 67.870
+Train Task: 1 Epoch: [116][  0/391]	DTime 0.181	BTime 0.283	Loss 0.1117 (0.1117)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [116][100/391]	DTime 0.002	BTime 0.085	Loss 0.1871 (0.1632)	Acc 94.531 (95.405)
+Train Task: 1 Epoch: [116][200/391]	DTime 0.001	BTime 0.084	Loss 0.1685 (0.1690)	Acc 94.531 (95.219)
+Train Task: 1 Epoch: [116][300/391]	DTime 0.001	BTime 0.084	Loss 0.1819 (0.1826)	Acc 93.750 (94.778)
+Train Task: 1 Epoch: [117][  0/391]	DTime 0.178	BTime 0.282	Loss 0.1658 (0.1658)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [117][100/391]	DTime 0.002	BTime 0.086	Loss 0.1985 (0.1653)	Acc 92.969 (95.196)
+Train Task: 1 Epoch: [117][200/391]	DTime 0.001	BTime 0.085	Loss 0.0977 (0.1690)	Acc 98.438 (95.068)
+Train Task: 1 Epoch: [117][300/391]	DTime 0.001	BTime 0.085	Loss 0.2771 (0.1807)	Acc 90.625 (94.692)
+Train Task: 1 Epoch: [118][  0/391]	DTime 0.176	BTime 0.281	Loss 0.1571 (0.1571)	Acc 95.312 (95.312)
+Train Task: 1 Epoch: [118][100/391]	DTime 0.002	BTime 0.086	Loss 0.1945 (0.1661)	Acc 92.969 (95.537)
+Train Task: 1 Epoch: [118][200/391]	DTime 0.001	BTime 0.085	Loss 0.2264 (0.1722)	Acc 92.969 (95.149)
+Train Task: 1 Epoch: [118][300/391]	DTime 0.001	BTime 0.085	Loss 0.2305 (0.1814)	Acc 92.188 (94.822)
+Train Task: 1 Epoch: [119][  0/391]	DTime 0.172	BTime 0.275	Loss 0.1693 (0.1693)	Acc 92.969 (92.969)
+Train Task: 1 Epoch: [119][100/391]	DTime 0.002	BTime 0.085	Loss 0.1525 (0.1744)	Acc 96.094 (95.042)
+Train Task: 1 Epoch: [119][200/391]	DTime 0.001	BTime 0.084	Loss 0.1157 (0.1721)	Acc 97.656 (95.126)
+Train Task: 1 Epoch: [119][300/391]	DTime 0.001	BTime 0.083	Loss 0.2860 (0.1743)	Acc 93.750 (95.009)
+Train Task: 1 Epoch: [120][  0/391]	DTime 0.185	BTime 0.290	Loss 0.2179 (0.2179)	Acc 93.750 (93.750)
+Train Task: 1 Epoch: [120][100/391]	DTime 0.002	BTime 0.085	Loss 0.1742 (0.1715)	Acc 94.531 (95.158)
+Train Task: 1 Epoch: [120][200/391]	DTime 0.001	BTime 0.084	Loss 0.1906 (0.1667)	Acc 95.312 (95.215)
+Train Task: 1 Epoch: [120][300/391]	DTime 0.001	BTime 0.084	Loss 0.2044 (0.1713)	Acc 96.094 (95.040)
+Test set: Loss 0.3072 (1.3860)	Acc 68.230
+Train Task: 1 Epoch: [121][  0/391]	DTime 0.180	BTime 0.282	Loss 0.1237 (0.1237)	Acc 96.875 (96.875)
+Train Task: 1 Epoch: [121][100/391]	DTime 0.002	BTime 0.085	Loss 0.0760 (0.0980)	Acc 97.656 (97.463)
+Train Task: 1 Epoch: [121][200/391]	DTime 0.001	BTime 0.084	Loss 0.0564 (0.0793)	Acc 99.219 (98.072)
+Train Task: 1 Epoch: [121][300/391]	DTime 0.001	BTime 0.084	Loss 0.0401 (0.0702)	Acc 99.219 (98.388)
+Train Task: 1 Epoch: [122][  0/391]	DTime 0.173	BTime 0.276	Loss 0.0234 (0.0234)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [122][100/391]	DTime 0.002	BTime 0.085	Loss 0.0278 (0.0350)	Acc 100.000 (99.474)
+Train Task: 1 Epoch: [122][200/391]	DTime 0.001	BTime 0.084	Loss 0.0276 (0.0343)	Acc 100.000 (99.456)
+Train Task: 1 Epoch: [122][300/391]	DTime 0.001	BTime 0.084	Loss 0.0258 (0.0334)	Acc 99.219 (99.491)
+Train Task: 1 Epoch: [123][  0/391]	DTime 0.182	BTime 0.286	Loss 0.0510 (0.0510)	Acc 98.438 (98.438)
+Train Task: 1 Epoch: [123][100/391]	DTime 0.002	BTime 0.085	Loss 0.0255 (0.0275)	Acc 99.219 (99.598)
+Train Task: 1 Epoch: [123][200/391]	DTime 0.001	BTime 0.084	Loss 0.0512 (0.0265)	Acc 99.219 (99.642)
+Train Task: 1 Epoch: [123][300/391]	DTime 0.001	BTime 0.084	Loss 0.0211 (0.0256)	Acc 100.000 (99.639)
+Train Task: 1 Epoch: [124][  0/391]	DTime 0.176	BTime 0.282	Loss 0.0130 (0.0130)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [124][100/391]	DTime 0.002	BTime 0.084	Loss 0.0243 (0.0217)	Acc 100.000 (99.760)
+Train Task: 1 Epoch: [124][200/391]	DTime 0.001	BTime 0.084	Loss 0.0462 (0.0209)	Acc 99.219 (99.767)
+Train Task: 1 Epoch: [124][300/391]	DTime 0.001	BTime 0.084	Loss 0.0382 (0.0209)	Acc 99.219 (99.772)
+Train Task: 1 Epoch: [125][  0/391]	DTime 0.185	BTime 0.284	Loss 0.0256 (0.0256)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [125][100/391]	DTime 0.002	BTime 0.085	Loss 0.0471 (0.0189)	Acc 98.438 (99.807)
+Train Task: 1 Epoch: [125][200/391]	DTime 0.001	BTime 0.083	Loss 0.0159 (0.0189)	Acc 100.000 (99.782)
+Train Task: 1 Epoch: [125][300/391]	DTime 0.001	BTime 0.083	Loss 0.0365 (0.0189)	Acc 99.219 (99.795)
+Test set: Loss 0.9948 (0.9899)	Acc 76.300
+Train Task: 1 Epoch: [126][  0/391]	DTime 0.173	BTime 0.278	Loss 0.0112 (0.0112)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [126][100/391]	DTime 0.002	BTime 0.085	Loss 0.0085 (0.0180)	Acc 100.000 (99.830)
+Train Task: 1 Epoch: [126][200/391]	DTime 0.001	BTime 0.083	Loss 0.0190 (0.0179)	Acc 99.219 (99.825)
+Train Task: 1 Epoch: [126][300/391]	DTime 0.001	BTime 0.082	Loss 0.0164 (0.0175)	Acc 100.000 (99.839)
+Train Task: 1 Epoch: [127][  0/391]	DTime 0.176	BTime 0.276	Loss 0.0131 (0.0131)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [127][100/391]	DTime 0.002	BTime 0.084	Loss 0.0138 (0.0165)	Acc 100.000 (99.884)
+Train Task: 1 Epoch: [127][200/391]	DTime 0.001	BTime 0.083	Loss 0.0166 (0.0161)	Acc 100.000 (99.880)
+Train Task: 1 Epoch: [127][300/391]	DTime 0.001	BTime 0.083	Loss 0.0134 (0.0162)	Acc 100.000 (99.852)
+Train Task: 1 Epoch: [128][  0/391]	DTime 0.172	BTime 0.278	Loss 0.0225 (0.0225)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [128][100/391]	DTime 0.002	BTime 0.084	Loss 0.0141 (0.0152)	Acc 100.000 (99.861)
+Train Task: 1 Epoch: [128][200/391]	DTime 0.001	BTime 0.082	Loss 0.0180 (0.0150)	Acc 100.000 (99.880)
+Train Task: 1 Epoch: [128][300/391]	DTime 0.001	BTime 0.082	Loss 0.0261 (0.0154)	Acc 99.219 (99.881)
+Train Task: 1 Epoch: [129][  0/391]	DTime 0.180	BTime 0.275	Loss 0.0146 (0.0146)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [129][100/391]	DTime 0.002	BTime 0.083	Loss 0.0087 (0.0146)	Acc 100.000 (99.861)
+Train Task: 1 Epoch: [129][200/391]	DTime 0.001	BTime 0.082	Loss 0.0073 (0.0147)	Acc 100.000 (99.883)
+Train Task: 1 Epoch: [129][300/391]	DTime 0.001	BTime 0.083	Loss 0.0090 (0.0148)	Acc 100.000 (99.883)
+Train Task: 1 Epoch: [130][  0/391]	DTime 0.182	BTime 0.287	Loss 0.0126 (0.0126)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [130][100/391]	DTime 0.002	BTime 0.085	Loss 0.0140 (0.0139)	Acc 100.000 (99.899)
+Train Task: 1 Epoch: [130][200/391]	DTime 0.001	BTime 0.085	Loss 0.0149 (0.0140)	Acc 100.000 (99.891)
+Train Task: 1 Epoch: [130][300/391]	DTime 0.001	BTime 0.084	Loss 0.0127 (0.0137)	Acc 100.000 (99.904)
+Test set: Loss 1.4184 (0.9728)	Acc 76.700
+Train Task: 1 Epoch: [131][  0/391]	DTime 0.177	BTime 0.280	Loss 0.0099 (0.0099)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [131][100/391]	DTime 0.002	BTime 0.085	Loss 0.0087 (0.0131)	Acc 100.000 (99.899)
+Train Task: 1 Epoch: [131][200/391]	DTime 0.001	BTime 0.084	Loss 0.0110 (0.0137)	Acc 100.000 (99.883)
+Train Task: 1 Epoch: [131][300/391]	DTime 0.001	BTime 0.083	Loss 0.0137 (0.0137)	Acc 100.000 (99.881)
+Train Task: 1 Epoch: [132][  0/391]	DTime 0.182	BTime 0.283	Loss 0.0101 (0.0101)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [132][100/391]	DTime 0.002	BTime 0.085	Loss 0.0127 (0.0122)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [132][200/391]	DTime 0.001	BTime 0.084	Loss 0.0106 (0.0123)	Acc 100.000 (99.930)
+Train Task: 1 Epoch: [132][300/391]	DTime 0.001	BTime 0.083	Loss 0.0126 (0.0126)	Acc 100.000 (99.920)
+Train Task: 1 Epoch: [133][  0/391]	DTime 0.174	BTime 0.280	Loss 0.0090 (0.0090)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [133][100/391]	DTime 0.002	BTime 0.085	Loss 0.0154 (0.0124)	Acc 99.219 (99.923)
+Train Task: 1 Epoch: [133][200/391]	DTime 0.001	BTime 0.084	Loss 0.0216 (0.0124)	Acc 99.219 (99.934)
+Train Task: 1 Epoch: [133][300/391]	DTime 0.001	BTime 0.084	Loss 0.0258 (0.0125)	Acc 100.000 (99.925)
+Train Task: 1 Epoch: [134][  0/391]	DTime 0.176	BTime 0.279	Loss 0.0102 (0.0102)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [134][100/391]	DTime 0.002	BTime 0.084	Loss 0.0091 (0.0118)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [134][200/391]	DTime 0.001	BTime 0.084	Loss 0.0147 (0.0122)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [134][300/391]	DTime 0.001	BTime 0.083	Loss 0.0162 (0.0123)	Acc 100.000 (99.938)
+Train Task: 1 Epoch: [135][  0/391]	DTime 0.181	BTime 0.284	Loss 0.0188 (0.0188)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [135][100/391]	DTime 0.002	BTime 0.086	Loss 0.0157 (0.0118)	Acc 100.000 (99.923)
+Train Task: 1 Epoch: [135][200/391]	DTime 0.001	BTime 0.085	Loss 0.0150 (0.0119)	Acc 100.000 (99.938)
+Train Task: 1 Epoch: [135][300/391]	DTime 0.001	BTime 0.084	Loss 0.0107 (0.0118)	Acc 100.000 (99.935)
+Test set: Loss 0.8679 (0.9523)	Acc 76.860
+Train Task: 1 Epoch: [136][  0/391]	DTime 0.176	BTime 0.281	Loss 0.0070 (0.0070)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [136][100/391]	DTime 0.002	BTime 0.084	Loss 0.0151 (0.0110)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [136][200/391]	DTime 0.001	BTime 0.083	Loss 0.0104 (0.0115)	Acc 100.000 (99.942)
+Train Task: 1 Epoch: [136][300/391]	DTime 0.001	BTime 0.083	Loss 0.0157 (0.0121)	Acc 100.000 (99.935)
+Train Task: 1 Epoch: [137][  0/391]	DTime 0.169	BTime 0.274	Loss 0.0109 (0.0109)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [137][100/391]	DTime 0.002	BTime 0.085	Loss 0.0113 (0.0111)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [137][200/391]	DTime 0.001	BTime 0.085	Loss 0.0218 (0.0117)	Acc 99.219 (99.938)
+Train Task: 1 Epoch: [137][300/391]	DTime 0.001	BTime 0.084	Loss 0.0096 (0.0118)	Acc 100.000 (99.927)
+Train Task: 1 Epoch: [138][  0/391]	DTime 0.185	BTime 0.277	Loss 0.0104 (0.0104)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [138][100/391]	DTime 0.002	BTime 0.085	Loss 0.0151 (0.0108)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [138][200/391]	DTime 0.001	BTime 0.084	Loss 0.0113 (0.0114)	Acc 100.000 (99.949)
+Train Task: 1 Epoch: [138][300/391]	DTime 0.001	BTime 0.084	Loss 0.0074 (0.0117)	Acc 100.000 (99.940)
+Train Task: 1 Epoch: [139][  0/391]	DTime 0.185	BTime 0.285	Loss 0.0083 (0.0083)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [139][100/391]	DTime 0.002	BTime 0.086	Loss 0.0084 (0.0113)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [139][200/391]	DTime 0.001	BTime 0.084	Loss 0.0106 (0.0115)	Acc 100.000 (99.938)
+Train Task: 1 Epoch: [139][300/391]	DTime 0.001	BTime 0.084	Loss 0.0106 (0.0118)	Acc 100.000 (99.943)
+Train Task: 1 Epoch: [140][  0/391]	DTime 0.181	BTime 0.286	Loss 0.0158 (0.0158)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [140][100/391]	DTime 0.002	BTime 0.085	Loss 0.0075 (0.0111)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [140][200/391]	DTime 0.001	BTime 0.084	Loss 0.0080 (0.0114)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [140][300/391]	DTime 0.001	BTime 0.084	Loss 0.0107 (0.0114)	Acc 100.000 (99.953)
+Test set: Loss 1.9767 (0.9370)	Acc 77.110
+Train Task: 1 Epoch: [141][  0/391]	DTime 0.172	BTime 0.275	Loss 0.0073 (0.0073)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [141][100/391]	DTime 0.002	BTime 0.085	Loss 0.0125 (0.0114)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [141][200/391]	DTime 0.001	BTime 0.083	Loss 0.0088 (0.0117)	Acc 100.000 (99.942)
+Train Task: 1 Epoch: [141][300/391]	DTime 0.001	BTime 0.083	Loss 0.0138 (0.0115)	Acc 100.000 (99.956)
+Train Task: 1 Epoch: [142][  0/391]	DTime 0.171	BTime 0.278	Loss 0.0099 (0.0099)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [142][100/391]	DTime 0.002	BTime 0.083	Loss 0.0102 (0.0116)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [142][200/391]	DTime 0.001	BTime 0.082	Loss 0.0149 (0.0113)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [142][300/391]	DTime 0.001	BTime 0.082	Loss 0.0115 (0.0113)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [143][  0/391]	DTime 0.181	BTime 0.286	Loss 0.0106 (0.0106)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [143][100/391]	DTime 0.002	BTime 0.086	Loss 0.0071 (0.0113)	Acc 100.000 (99.954)
+Train Task: 1 Epoch: [143][200/391]	DTime 0.001	BTime 0.084	Loss 0.0075 (0.0113)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [143][300/391]	DTime 0.001	BTime 0.084	Loss 0.0085 (0.0115)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [144][  0/391]	DTime 0.171	BTime 0.278	Loss 0.0164 (0.0164)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [144][100/391]	DTime 0.002	BTime 0.086	Loss 0.0065 (0.0115)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [144][200/391]	DTime 0.001	BTime 0.084	Loss 0.0141 (0.0112)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [144][300/391]	DTime 0.001	BTime 0.084	Loss 0.0164 (0.0113)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [145][  0/391]	DTime 0.177	BTime 0.282	Loss 0.0095 (0.0095)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [145][100/391]	DTime 0.002	BTime 0.083	Loss 0.0117 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [145][200/391]	DTime 0.001	BTime 0.083	Loss 0.0095 (0.0108)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [145][300/391]	DTime 0.001	BTime 0.083	Loss 0.0131 (0.0111)	Acc 100.000 (99.958)
+Test set: Loss 0.2265 (0.9286)	Acc 77.090
+Train Task: 1 Epoch: [146][  0/391]	DTime 0.173	BTime 0.278	Loss 0.0080 (0.0080)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [146][100/391]	DTime 0.002	BTime 0.086	Loss 0.0127 (0.0107)	Acc 100.000 (99.954)
+Train Task: 1 Epoch: [146][200/391]	DTime 0.001	BTime 0.085	Loss 0.0089 (0.0112)	Acc 100.000 (99.949)
+Train Task: 1 Epoch: [146][300/391]	DTime 0.001	BTime 0.085	Loss 0.0113 (0.0112)	Acc 100.000 (99.943)
+Train Task: 1 Epoch: [147][  0/391]	DTime 0.170	BTime 0.272	Loss 0.0195 (0.0195)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [147][100/391]	DTime 0.002	BTime 0.085	Loss 0.0129 (0.0108)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [147][200/391]	DTime 0.001	BTime 0.084	Loss 0.0100 (0.0110)	Acc 100.000 (99.949)
+Train Task: 1 Epoch: [147][300/391]	DTime 0.001	BTime 0.083	Loss 0.0087 (0.0111)	Acc 100.000 (99.958)
+Train Task: 1 Epoch: [148][  0/391]	DTime 0.182	BTime 0.285	Loss 0.0111 (0.0111)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [148][100/391]	DTime 0.002	BTime 0.085	Loss 0.0182 (0.0106)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [148][200/391]	DTime 0.001	BTime 0.084	Loss 0.0103 (0.0109)	Acc 100.000 (99.981)
+Train Task: 1 Epoch: [148][300/391]	DTime 0.001	BTime 0.084	Loss 0.0081 (0.0112)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [149][  0/391]	DTime 0.176	BTime 0.284	Loss 0.0121 (0.0121)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [149][100/391]	DTime 0.002	BTime 0.086	Loss 0.0163 (0.0110)	Acc 100.000 (99.985)
+Train Task: 1 Epoch: [149][200/391]	DTime 0.001	BTime 0.085	Loss 0.0139 (0.0112)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [149][300/391]	DTime 0.001	BTime 0.085	Loss 0.0127 (0.0113)	Acc 100.000 (99.964)
+Train Task: 1 Epoch: [150][  0/391]	DTime 0.177	BTime 0.280	Loss 0.0190 (0.0190)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [150][100/391]	DTime 0.002	BTime 0.086	Loss 0.0200 (0.0110)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [150][200/391]	DTime 0.001	BTime 0.085	Loss 0.0078 (0.0112)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [150][300/391]	DTime 0.001	BTime 0.085	Loss 0.0108 (0.0115)	Acc 100.000 (99.961)
+Test set: Loss 2.2992 (0.9227)	Acc 77.260
+Train Task: 1 Epoch: [151][  0/391]	DTime 0.168	BTime 0.272	Loss 0.0091 (0.0091)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [151][100/391]	DTime 0.002	BTime 0.086	Loss 0.0104 (0.0113)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [151][200/391]	DTime 0.001	BTime 0.084	Loss 0.0116 (0.0114)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [151][300/391]	DTime 0.001	BTime 0.084	Loss 0.0062 (0.0114)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [152][  0/391]	DTime 0.176	BTime 0.279	Loss 0.0093 (0.0093)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [152][100/391]	DTime 0.002	BTime 0.085	Loss 0.0150 (0.0109)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [152][200/391]	DTime 0.001	BTime 0.084	Loss 0.0188 (0.0113)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [152][300/391]	DTime 0.001	BTime 0.083	Loss 0.0139 (0.0114)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [153][  0/391]	DTime 0.192	BTime 0.291	Loss 0.0112 (0.0112)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [153][100/391]	DTime 0.002	BTime 0.085	Loss 0.0078 (0.0114)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [153][200/391]	DTime 0.001	BTime 0.084	Loss 0.0082 (0.0113)	Acc 100.000 (99.957)
+Train Task: 1 Epoch: [153][300/391]	DTime 0.001	BTime 0.083	Loss 0.0079 (0.0114)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [154][  0/391]	DTime 0.173	BTime 0.265	Loss 0.0082 (0.0082)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [154][100/391]	DTime 0.002	BTime 0.086	Loss 0.0072 (0.0112)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [154][200/391]	DTime 0.001	BTime 0.085	Loss 0.0209 (0.0113)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [154][300/391]	DTime 0.001	BTime 0.084	Loss 0.0104 (0.0116)	Acc 100.000 (99.958)
+Train Task: 1 Epoch: [155][  0/391]	DTime 0.173	BTime 0.279	Loss 0.0137 (0.0137)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [155][100/391]	DTime 0.002	BTime 0.086	Loss 0.0100 (0.0113)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [155][200/391]	DTime 0.001	BTime 0.085	Loss 0.0067 (0.0111)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [155][300/391]	DTime 0.001	BTime 0.085	Loss 0.0123 (0.0114)	Acc 100.000 (99.958)
+Test set: Loss 0.8212 (0.9144)	Acc 77.210
+Train Task: 1 Epoch: [156][  0/391]	DTime 0.174	BTime 0.278	Loss 0.0108 (0.0108)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [156][100/391]	DTime 0.002	BTime 0.085	Loss 0.0127 (0.0108)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [156][200/391]	DTime 0.001	BTime 0.084	Loss 0.0106 (0.0114)	Acc 100.000 (99.957)
+Train Task: 1 Epoch: [156][300/391]	DTime 0.001	BTime 0.084	Loss 0.0104 (0.0115)	Acc 100.000 (99.956)
+Train Task: 1 Epoch: [157][  0/391]	DTime 0.176	BTime 0.282	Loss 0.0094 (0.0094)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [157][100/391]	DTime 0.002	BTime 0.086	Loss 0.0128 (0.0113)	Acc 100.000 (99.954)
+Train Task: 1 Epoch: [157][200/391]	DTime 0.001	BTime 0.086	Loss 0.0109 (0.0116)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [157][300/391]	DTime 0.001	BTime 0.085	Loss 0.0099 (0.0116)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [158][  0/391]	DTime 0.171	BTime 0.278	Loss 0.0104 (0.0104)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [158][100/391]	DTime 0.002	BTime 0.087	Loss 0.0123 (0.0107)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [158][200/391]	DTime 0.001	BTime 0.084	Loss 0.0109 (0.0112)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [158][300/391]	DTime 0.001	BTime 0.084	Loss 0.0167 (0.0112)	Acc 99.219 (99.971)
+Train Task: 1 Epoch: [159][  0/391]	DTime 0.183	BTime 0.282	Loss 0.0093 (0.0093)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [159][100/391]	DTime 0.002	BTime 0.086	Loss 0.0098 (0.0118)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [159][200/391]	DTime 0.001	BTime 0.085	Loss 0.0106 (0.0117)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [159][300/391]	DTime 0.001	BTime 0.085	Loss 0.0116 (0.0117)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [160][  0/391]	DTime 0.175	BTime 0.276	Loss 0.0070 (0.0070)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [160][100/391]	DTime 0.002	BTime 0.085	Loss 0.0119 (0.0112)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [160][200/391]	DTime 0.001	BTime 0.084	Loss 0.0157 (0.0114)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [160][300/391]	DTime 0.001	BTime 0.084	Loss 0.0089 (0.0117)	Acc 100.000 (99.958)
+Test set: Loss 0.5534 (0.9082)	Acc 77.380
+Train Task: 1 Epoch: [161][  0/391]	DTime 0.174	BTime 0.275	Loss 0.0133 (0.0133)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [161][100/391]	DTime 0.002	BTime 0.085	Loss 0.0122 (0.0108)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [161][200/391]	DTime 0.001	BTime 0.084	Loss 0.0102 (0.0109)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [161][300/391]	DTime 0.001	BTime 0.083	Loss 0.0161 (0.0111)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [162][  0/391]	DTime 0.178	BTime 0.276	Loss 0.0110 (0.0110)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [162][100/391]	DTime 0.002	BTime 0.085	Loss 0.0095 (0.0110)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [162][200/391]	DTime 0.001	BTime 0.084	Loss 0.0144 (0.0110)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [162][300/391]	DTime 0.001	BTime 0.084	Loss 0.0089 (0.0108)	Acc 100.000 (99.971)
+Train Task: 1 Epoch: [163][  0/391]	DTime 0.183	BTime 0.281	Loss 0.0080 (0.0080)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [163][100/391]	DTime 0.002	BTime 0.086	Loss 0.0111 (0.0105)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [163][200/391]	DTime 0.001	BTime 0.085	Loss 0.0108 (0.0109)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [163][300/391]	DTime 0.001	BTime 0.084	Loss 0.0084 (0.0109)	Acc 100.000 (99.958)
+Train Task: 1 Epoch: [164][  0/391]	DTime 0.183	BTime 0.286	Loss 0.0111 (0.0111)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [164][100/391]	DTime 0.002	BTime 0.086	Loss 0.0093 (0.0105)	Acc 100.000 (99.985)
+Train Task: 1 Epoch: [164][200/391]	DTime 0.001	BTime 0.085	Loss 0.0193 (0.0104)	Acc 99.219 (99.984)
+Train Task: 1 Epoch: [164][300/391]	DTime 0.001	BTime 0.084	Loss 0.0099 (0.0105)	Acc 100.000 (99.974)
+Train Task: 1 Epoch: [165][  0/391]	DTime 0.177	BTime 0.279	Loss 0.0100 (0.0100)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [165][100/391]	DTime 0.002	BTime 0.086	Loss 0.0076 (0.0106)	Acc 100.000 (99.985)
+Train Task: 1 Epoch: [165][200/391]	DTime 0.001	BTime 0.085	Loss 0.0075 (0.0104)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [165][300/391]	DTime 0.001	BTime 0.085	Loss 0.0143 (0.0108)	Acc 100.000 (99.964)
+Test set: Loss 1.1385 (0.9040)	Acc 77.510
+Train Task: 1 Epoch: [166][  0/391]	DTime 0.176	BTime 0.276	Loss 0.0105 (0.0105)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [166][100/391]	DTime 0.002	BTime 0.085	Loss 0.0111 (0.0106)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [166][200/391]	DTime 0.001	BTime 0.084	Loss 0.0107 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [166][300/391]	DTime 0.001	BTime 0.084	Loss 0.0067 (0.0103)	Acc 100.000 (99.979)
+Train Task: 1 Epoch: [167][  0/391]	DTime 0.178	BTime 0.285	Loss 0.0088 (0.0088)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [167][100/391]	DTime 0.002	BTime 0.086	Loss 0.0124 (0.0108)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [167][200/391]	DTime 0.001	BTime 0.085	Loss 0.0098 (0.0108)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [167][300/391]	DTime 0.001	BTime 0.085	Loss 0.0139 (0.0109)	Acc 100.000 (99.964)
+Train Task: 1 Epoch: [168][  0/391]	DTime 0.184	BTime 0.280	Loss 0.0076 (0.0076)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [168][100/391]	DTime 0.002	BTime 0.084	Loss 0.0135 (0.0108)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [168][200/391]	DTime 0.001	BTime 0.083	Loss 0.0110 (0.0105)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [168][300/391]	DTime 0.001	BTime 0.083	Loss 0.0202 (0.0107)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [169][  0/391]	DTime 0.172	BTime 0.279	Loss 0.0077 (0.0077)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [169][100/391]	DTime 0.002	BTime 0.085	Loss 0.0090 (0.0104)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [169][200/391]	DTime 0.001	BTime 0.084	Loss 0.0094 (0.0106)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [169][300/391]	DTime 0.001	BTime 0.084	Loss 0.0078 (0.0105)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [170][  0/391]	DTime 0.156	BTime 0.257	Loss 0.0082 (0.0082)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [170][100/391]	DTime 0.002	BTime 0.086	Loss 0.0141 (0.0103)	Acc 100.000 (99.985)
+Train Task: 1 Epoch: [170][200/391]	DTime 0.001	BTime 0.085	Loss 0.0078 (0.0106)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [170][300/391]	DTime 0.001	BTime 0.085	Loss 0.0116 (0.0104)	Acc 100.000 (99.977)
+Test set: Loss 1.5594 (0.9043)	Acc 77.540
+Train Task: 1 Epoch: [171][  0/391]	DTime 0.173	BTime 0.278	Loss 0.0147 (0.0147)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [171][100/391]	DTime 0.002	BTime 0.085	Loss 0.0111 (0.0106)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [171][200/391]	DTime 0.001	BTime 0.084	Loss 0.0071 (0.0108)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [171][300/391]	DTime 0.001	BTime 0.084	Loss 0.0110 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [172][  0/391]	DTime 0.185	BTime 0.280	Loss 0.0106 (0.0106)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [172][100/391]	DTime 0.002	BTime 0.085	Loss 0.0094 (0.0107)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [172][200/391]	DTime 0.001	BTime 0.084	Loss 0.0086 (0.0106)	Acc 100.000 (99.946)
+Train Task: 1 Epoch: [172][300/391]	DTime 0.001	BTime 0.084	Loss 0.0097 (0.0106)	Acc 100.000 (99.951)
+Train Task: 1 Epoch: [173][  0/391]	DTime 0.176	BTime 0.281	Loss 0.0098 (0.0098)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [173][100/391]	DTime 0.002	BTime 0.086	Loss 0.0082 (0.0102)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [173][200/391]	DTime 0.001	BTime 0.085	Loss 0.0082 (0.0104)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [173][300/391]	DTime 0.001	BTime 0.085	Loss 0.0092 (0.0106)	Acc 100.000 (99.956)
+Train Task: 1 Epoch: [174][  0/391]	DTime 0.175	BTime 0.280	Loss 0.0103 (0.0103)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [174][100/391]	DTime 0.002	BTime 0.086	Loss 0.0073 (0.0107)	Acc 100.000 (99.954)
+Train Task: 1 Epoch: [174][200/391]	DTime 0.001	BTime 0.085	Loss 0.0103 (0.0104)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [174][300/391]	DTime 0.001	BTime 0.085	Loss 0.0118 (0.0105)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [175][  0/391]	DTime 0.174	BTime 0.273	Loss 0.0150 (0.0150)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [175][100/391]	DTime 0.002	BTime 0.085	Loss 0.0111 (0.0101)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [175][200/391]	DTime 0.001	BTime 0.084	Loss 0.0099 (0.0105)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [175][300/391]	DTime 0.001	BTime 0.085	Loss 0.0106 (0.0105)	Acc 100.000 (99.977)
+Test set: Loss 0.5924 (0.9007)	Acc 77.400
+Train Task: 1 Epoch: [176][  0/391]	DTime 0.172	BTime 0.274	Loss 0.0107 (0.0107)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [176][100/391]	DTime 0.002	BTime 0.084	Loss 0.0088 (0.0108)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [176][200/391]	DTime 0.001	BTime 0.084	Loss 0.0100 (0.0108)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [176][300/391]	DTime 0.001	BTime 0.084	Loss 0.0082 (0.0107)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [177][  0/391]	DTime 0.188	BTime 0.284	Loss 0.0068 (0.0068)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [177][100/391]	DTime 0.002	BTime 0.086	Loss 0.0092 (0.0110)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [177][200/391]	DTime 0.001	BTime 0.085	Loss 0.0087 (0.0108)	Acc 100.000 (99.953)
+Train Task: 1 Epoch: [177][300/391]	DTime 0.001	BTime 0.085	Loss 0.0092 (0.0105)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [178][  0/391]	DTime 0.173	BTime 0.274	Loss 0.0093 (0.0093)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [178][100/391]	DTime 0.002	BTime 0.087	Loss 0.0097 (0.0106)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [178][200/391]	DTime 0.001	BTime 0.084	Loss 0.0074 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [178][300/391]	DTime 0.001	BTime 0.084	Loss 0.0086 (0.0104)	Acc 100.000 (99.979)
+Train Task: 1 Epoch: [179][  0/391]	DTime 0.183	BTime 0.286	Loss 0.0108 (0.0108)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [179][100/391]	DTime 0.002	BTime 0.086	Loss 0.0074 (0.0106)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [179][200/391]	DTime 0.001	BTime 0.085	Loss 0.0076 (0.0105)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [179][300/391]	DTime 0.001	BTime 0.084	Loss 0.0121 (0.0106)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [180][  0/391]	DTime 0.180	BTime 0.277	Loss 0.0129 (0.0129)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [180][100/391]	DTime 0.002	BTime 0.086	Loss 0.0168 (0.0104)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [180][200/391]	DTime 0.001	BTime 0.084	Loss 0.0111 (0.0104)	Acc 100.000 (99.988)
+Train Task: 1 Epoch: [180][300/391]	DTime 0.001	BTime 0.084	Loss 0.0150 (0.0105)	Acc 99.219 (99.982)
+Test set: Loss 1.0506 (0.9025)	Acc 77.590
+Train Task: 1 Epoch: [181][  0/391]	DTime 0.186	BTime 0.283	Loss 0.0140 (0.0140)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [181][100/391]	DTime 0.002	BTime 0.085	Loss 0.0112 (0.0103)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [181][200/391]	DTime 0.001	BTime 0.084	Loss 0.0090 (0.0103)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [181][300/391]	DTime 0.001	BTime 0.084	Loss 0.0114 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [182][  0/391]	DTime 0.188	BTime 0.294	Loss 0.0147 (0.0147)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [182][100/391]	DTime 0.002	BTime 0.085	Loss 0.0094 (0.0108)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [182][200/391]	DTime 0.001	BTime 0.084	Loss 0.0072 (0.0105)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [182][300/391]	DTime 0.001	BTime 0.084	Loss 0.0104 (0.0106)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [183][  0/391]	DTime 0.173	BTime 0.276	Loss 0.0116 (0.0116)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [183][100/391]	DTime 0.002	BTime 0.086	Loss 0.0163 (0.0106)	Acc 100.000 (99.961)
+Train Task: 1 Epoch: [183][200/391]	DTime 0.001	BTime 0.084	Loss 0.0109 (0.0106)	Acc 100.000 (99.957)
+Train Task: 1 Epoch: [183][300/391]	DTime 0.001	BTime 0.084	Loss 0.0079 (0.0106)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [184][  0/391]	DTime 0.161	BTime 0.254	Loss 0.0148 (0.0148)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [184][100/391]	DTime 0.002	BTime 0.086	Loss 0.0167 (0.0108)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [184][200/391]	DTime 0.001	BTime 0.085	Loss 0.0115 (0.0106)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [184][300/391]	DTime 0.001	BTime 0.084	Loss 0.0110 (0.0109)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [185][  0/391]	DTime 0.183	BTime 0.279	Loss 0.0116 (0.0116)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [185][100/391]	DTime 0.002	BTime 0.085	Loss 0.0083 (0.0103)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [185][200/391]	DTime 0.001	BTime 0.084	Loss 0.0092 (0.0105)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [185][300/391]	DTime 0.001	BTime 0.084	Loss 0.0132 (0.0107)	Acc 99.219 (99.974)
+Test set: Loss 0.6814 (0.9007)	Acc 77.460
+Train Task: 1 Epoch: [186][  0/391]	DTime 0.173	BTime 0.276	Loss 0.0108 (0.0108)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [186][100/391]	DTime 0.002	BTime 0.085	Loss 0.0088 (0.0101)	Acc 100.000 (99.992)
+Train Task: 1 Epoch: [186][200/391]	DTime 0.001	BTime 0.084	Loss 0.0137 (0.0102)	Acc 100.000 (99.988)
+Train Task: 1 Epoch: [186][300/391]	DTime 0.001	BTime 0.084	Loss 0.0107 (0.0106)	Acc 100.000 (99.974)
+Train Task: 1 Epoch: [187][  0/391]	DTime 0.179	BTime 0.284	Loss 0.0091 (0.0091)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [187][100/391]	DTime 0.002	BTime 0.085	Loss 0.0119 (0.0102)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [187][200/391]	DTime 0.001	BTime 0.084	Loss 0.0096 (0.0102)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [187][300/391]	DTime 0.001	BTime 0.083	Loss 0.0104 (0.0103)	Acc 100.000 (99.971)
+Train Task: 1 Epoch: [188][  0/391]	DTime 0.184	BTime 0.286	Loss 0.0113 (0.0113)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [188][100/391]	DTime 0.002	BTime 0.085	Loss 0.0180 (0.0103)	Acc 99.219 (99.961)
+Train Task: 1 Epoch: [188][200/391]	DTime 0.001	BTime 0.084	Loss 0.0108 (0.0101)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [188][300/391]	DTime 0.001	BTime 0.084	Loss 0.0097 (0.0102)	Acc 100.000 (99.974)
+Train Task: 1 Epoch: [189][  0/391]	DTime 0.172	BTime 0.277	Loss 0.0103 (0.0103)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [189][100/391]	DTime 0.002	BTime 0.085	Loss 0.0090 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [189][200/391]	DTime 0.001	BTime 0.084	Loss 0.0091 (0.0103)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [189][300/391]	DTime 0.001	BTime 0.084	Loss 0.0161 (0.0102)	Acc 99.219 (99.979)
+Train Task: 1 Epoch: [190][  0/391]	DTime 0.170	BTime 0.275	Loss 0.0135 (0.0135)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [190][100/391]	DTime 0.002	BTime 0.085	Loss 0.0088 (0.0104)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [190][200/391]	DTime 0.001	BTime 0.084	Loss 0.0153 (0.0103)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [190][300/391]	DTime 0.001	BTime 0.084	Loss 0.0091 (0.0103)	Acc 100.000 (99.971)
+Test set: Loss 0.8243 (0.9004)	Acc 77.630
+Train Task: 1 Epoch: [191][  0/391]	DTime 0.174	BTime 0.276	Loss 0.0090 (0.0090)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [191][100/391]	DTime 0.002	BTime 0.086	Loss 0.0102 (0.0104)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [191][200/391]	DTime 0.001	BTime 0.084	Loss 0.0097 (0.0103)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [191][300/391]	DTime 0.001	BTime 0.083	Loss 0.0092 (0.0103)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [192][  0/391]	DTime 0.177	BTime 0.282	Loss 0.0119 (0.0119)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [192][100/391]	DTime 0.002	BTime 0.085	Loss 0.0074 (0.0106)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [192][200/391]	DTime 0.001	BTime 0.084	Loss 0.0091 (0.0104)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [192][300/391]	DTime 0.001	BTime 0.084	Loss 0.0071 (0.0105)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [193][  0/391]	DTime 0.178	BTime 0.283	Loss 0.0094 (0.0094)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [193][100/391]	DTime 0.002	BTime 0.086	Loss 0.0088 (0.0104)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [193][200/391]	DTime 0.001	BTime 0.085	Loss 0.0078 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [193][300/391]	DTime 0.001	BTime 0.085	Loss 0.0114 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [194][  0/391]	DTime 0.179	BTime 0.281	Loss 0.0199 (0.0199)	Acc 99.219 (99.219)
+Train Task: 1 Epoch: [194][100/391]	DTime 0.002	BTime 0.083	Loss 0.0229 (0.0107)	Acc 99.219 (99.961)
+Train Task: 1 Epoch: [194][200/391]	DTime 0.001	BTime 0.082	Loss 0.0115 (0.0108)	Acc 100.000 (99.965)
+Train Task: 1 Epoch: [194][300/391]	DTime 0.001	BTime 0.082	Loss 0.0089 (0.0109)	Acc 100.000 (99.958)
+Train Task: 1 Epoch: [195][  0/391]	DTime 0.180	BTime 0.284	Loss 0.0094 (0.0094)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [195][100/391]	DTime 0.002	BTime 0.083	Loss 0.0113 (0.0105)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [195][200/391]	DTime 0.001	BTime 0.083	Loss 0.0093 (0.0106)	Acc 100.000 (99.973)
+Train Task: 1 Epoch: [195][300/391]	DTime 0.001	BTime 0.083	Loss 0.0119 (0.0106)	Acc 100.000 (99.969)
+Test set: Loss 0.9092 (0.9005)	Acc 77.570
+Train Task: 1 Epoch: [196][  0/391]	DTime 0.174	BTime 0.278	Loss 0.0129 (0.0129)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [196][100/391]	DTime 0.002	BTime 0.085	Loss 0.0117 (0.0104)	Acc 100.000 (99.985)
+Train Task: 1 Epoch: [196][200/391]	DTime 0.001	BTime 0.085	Loss 0.0105 (0.0105)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [196][300/391]	DTime 0.001	BTime 0.084	Loss 0.0120 (0.0105)	Acc 100.000 (99.982)
+Train Task: 1 Epoch: [197][  0/391]	DTime 0.174	BTime 0.280	Loss 0.0139 (0.0139)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [197][100/391]	DTime 0.002	BTime 0.085	Loss 0.0081 (0.0102)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [197][200/391]	DTime 0.001	BTime 0.085	Loss 0.0129 (0.0102)	Acc 100.000 (99.984)
+Train Task: 1 Epoch: [197][300/391]	DTime 0.001	BTime 0.084	Loss 0.0086 (0.0104)	Acc 100.000 (99.982)
+Train Task: 1 Epoch: [198][  0/391]	DTime 0.181	BTime 0.288	Loss 0.0072 (0.0072)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [198][100/391]	DTime 0.002	BTime 0.086	Loss 0.0078 (0.0105)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [198][200/391]	DTime 0.001	BTime 0.085	Loss 0.0082 (0.0105)	Acc 100.000 (99.969)
+Train Task: 1 Epoch: [198][300/391]	DTime 0.001	BTime 0.084	Loss 0.0102 (0.0104)	Acc 100.000 (99.966)
+Train Task: 1 Epoch: [199][  0/391]	DTime 0.173	BTime 0.278	Loss 0.0100 (0.0100)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [199][100/391]	DTime 0.002	BTime 0.085	Loss 0.0094 (0.0099)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [199][200/391]	DTime 0.001	BTime 0.084	Loss 0.0098 (0.0102)	Acc 100.000 (99.988)
+Train Task: 1 Epoch: [199][300/391]	DTime 0.001	BTime 0.084	Loss 0.0298 (0.0104)	Acc 99.219 (99.982)
+Train Task: 1 Epoch: [200][  0/391]	DTime 0.190	BTime 0.286	Loss 0.0086 (0.0086)	Acc 100.000 (100.000)
+Train Task: 1 Epoch: [200][100/391]	DTime 0.002	BTime 0.086	Loss 0.0076 (0.0102)	Acc 100.000 (99.977)
+Train Task: 1 Epoch: [200][200/391]	DTime 0.001	BTime 0.085	Loss 0.0068 (0.0101)	Acc 100.000 (99.988)
+Train Task: 1 Epoch: [200][300/391]	DTime 0.001	BTime 0.085	Loss 0.0095 (0.0104)	Acc 100.000 (99.984)
+Test set: Loss 1.8846 (0.9008)	Acc 77.560
+Test set: Loss 0.2567 (0.9008)	Acc 77.560
