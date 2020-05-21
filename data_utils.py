@@ -86,7 +86,8 @@ class DataLoaderConstructor:
 
         transforms = []
         if dataset_name in ['cifar10', 'cifar100', 'imagenet'] and self.config.train:
-            transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
+            transforms.extend([torchvision.transforms.ColorJitter(brightness=63/255, contrast=0.8),
+                                torchvision.transforms.RandomCrop(32, padding=4),
                                 torchvision.transforms.RandomHorizontalFlip()])
         transforms.extend([torchvision.transforms.ToTensor(),
                             torchvision.transforms.Normalize(means[dataset_name],
