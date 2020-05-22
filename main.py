@@ -49,6 +49,9 @@ parser.add_argument('--dataset', type=str, default='mnist',
                     help='Name of dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist')
 parser.add_argument('--unlabeled-dataset', type=str, default='mnist',
                     help='Name of unlabeled dataset. (mnist/cifar10/cifar100/imagenet) (default: mnist)')
+parser.add_argument('--data-path', type=str, 
+                    default='/local-scratch2/hadi/datasets/ILSVRC/Data/CLS-LOC',
+                    help='Path of data (default: my own computer path!')
 parser.add_argument('--tasks', type=int, default=2, metavar='N',
                 help='number of tasks (default: 2)')
 parser.add_argument('--exemplar-size', type=int, default=0, metavar='N',

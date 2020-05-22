@@ -1,3 +1,4 @@
+import os
 import math
 import h5py
 import numpy as np
@@ -9,7 +10,7 @@ import torchvision
 
 class DataConfig:
 
-    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, 
+    def __init__(self, args, train, dataset, dataset_type, is_continual, batch_size, data_path=None,
                  workers=None,  tasks=None, exemplar_size=None, oversample_ratio=None):
         
         self.train = train
@@ -18,6 +19,7 @@ class DataConfig:
         self.is_continual = is_continual
         self.batch_size = batch_size
 
+        self.data_path = data_path if data_path else args.data_path
         self.workers = workers if workers else args.workers
         self.tasks = tasks if tasks else args.tasks
         self.exemplar_size = exemplar_size if exemplar_size else args.exemplar_size
@@ -29,46 +31,38 @@ class DataLoaderConstructor:
     def __init__(self, config):
         self.config = config
 
-        original_data, original_targets = self.get_data_targets(self.config.dataset)
+        original_dataset, original_targets = self.get_dataset_targets(self.config.dataset)
         transforms = self.get_transforms(self.config.dataset)
 
         self.tasks_targets, indexes = \
             self.get_tasks_targets_indexes(original_targets)
         
-        self.data_loaders = self.create_dataloaders(original_data, original_targets,
+        self.data_loaders = self.create_dataloaders(original_dataset, original_targets,
                                                     indexes, transforms)
 
-    def get_data_targets(self, dataset_name):
+    def get_dataset_targets(self, dataset_name):
         if dataset_name == 'mnist':
             dataset = torchvision.datasets.MNIST('./data/mnist',
                                                   train=self.config.train, download=True)
-            data, targets = dataset.data, dataset.targets
         elif dataset_name == 'cifar10':
             dataset = torchvision.datasets.CIFAR10('./data/cifar10',
                                                     train=self.config.train, download=True)
-            data, targets = dataset.data, dataset.targets
         elif dataset_name == 'cifar100':
             dataset = torchvision.datasets.CIFAR100('./data/cifar100',
                                                      train=self.config.train, download=True)
-            data, targets = dataset.data, dataset.targets
         elif dataset_name == 'imagenet':
-            if self.config.train:
-                file_path = './data/imagenet/imagenet_train_500.h5'
-            else:
-                file_path = './data/imagenet/imagenet_test_100.h5'
-            with h5py.File(file_path, 'r') as f:
-                data, targets = f['data'][:], f['labels'][:]
+            data_dir = os.path.join(self.config.data_path, 'train' if self.config.train else 'val')
+            dataset = torchvision.datasets.ImageFolder(data_dir)
         else:
             raise ValueError('dataset is not supported.')
-            
+        
+        targets = dataset.targets
         if torch.is_tensor(targets):
-            data = data.numpy()
             targets = targets.numpy()
         elif type(targets) == list:
-            data = np.array(data)
             targets = np.array(targets)
 
-        return data, targets
+        return dataset, targets
 
     def get_transforms(self, dataset_name):
         means = {
@@ -85,13 +79,22 @@ class DataLoaderConstructor:
         }
 
         transforms = []
-        if dataset_name in ['cifar10', 'cifar100', 'imagenet'] and self.config.train:
-            transforms.extend([torchvision.transforms.ColorJitter(brightness=63/255, contrast=0.8),
-                                torchvision.transforms.RandomCrop(32, padding=4),
-                                torchvision.transforms.RandomHorizontalFlip()])
+        if self.config.train:
+            if dataset_name in ['cifar10', 'cifar100']:
+                transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
+                                    torchvision.transforms.RandomHorizontalFlip()])
+            elif dataset_name == 'imagenet':
+                transforms.extend([torchvision.transforms.RandomResizedCrop(224),
+                                   torchvision.transforms.RandomHorizontalFlip()])
+        else:
+            if dataset_name == 'imagenet':
+                transforms.extend([torchvision.transforms.Resize(256),
+                                   torchvision.transforms.CenterCrop(224)])
+        
         transforms.extend([torchvision.transforms.ToTensor(),
                             torchvision.transforms.Normalize(means[dataset_name],
                                                              stds[dataset_name])])
+        
         return torchvision.transforms.Compose(transforms)
 
     def get_tasks_targets_indexes(self, original_targets):
@@ -111,16 +114,16 @@ class DataLoaderConstructor:
         
         return tasks_targets, indexes
 
-    def create_dataloaders(self, data, targets, indexes, transforms):
+    def create_dataloaders(self, org_dataset, targets, indexes, transforms):
         data_loaders = []
 
         for task_indexes in indexes:
             if self.config.dataset_type == 'softmax':
-                dataset = SimpleDataset(data, targets, task_indexes, transform=transforms)
+                dataset = SimpleDataset(org_dataset, task_indexes, transform=transforms)
             elif self.config.dataset_type == 'triplet':
-                dataset = TripletDataset(data, targets, task_indexes, transform=transforms)
+                dataset = TripletDataset(org_dataset, targets, task_indexes, transform=transforms)
             elif self.config.dataset_type == 'contrastive':
-                dataset = ContrastiveDataset(data, targets, task_indexes, transform=transforms)
+                dataset = ContrastiveDataset(org_dataset, task_indexes, transform=transforms)
             
             kwargs = {'num_workers': self.config.workers, 'pin_memory': True} if \
                 torch.cuda.device_count() > 0 else {}
@@ -233,9 +236,8 @@ class ContinualIndexConstructor:
 
 class SimpleDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data, targets, indexes, transform=None):
-        self.data = data
-        self.targets = targets
+    def __init__(self, dataset, indexes, transform=None):
+        self.dataset = dataset
         self.indexes = indexes
         self.transform = transform
         
@@ -244,9 +246,7 @@ class SimpleDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         org_idx = self.indexes[idx]
-        img, target = self.data[org_idx], int(self.targets[org_idx])
-        mode = 'L' if len(img.shape) == 2 else 'RGB'
-        img = Image.fromarray(img, mode=mode)
+        img, target = self.dataset.__getitem__(org_idx)
 
         if self.transform is not None:
             img = self.transform(img)
@@ -256,8 +256,8 @@ class SimpleDataset(torch.utils.data.Dataset):
 
 class TripletDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data, targets, indexes, transform=None):
-        self.data = data
+    def __init__(self, dataset, targets, indexes, transform=None):
+        self.dataset = dataset
         self.targets = targets
         self.indexes = indexes
         self.transform = transform
@@ -296,10 +296,11 @@ class TripletDataset(torch.utils.data.Dataset):
         neg_idx = self.indexes[self.neg_idxs[idx]]
 
         target = int(self.targets[anchor_indx])
-        imgs = [self.data[anchor_indx], self.data[pos_idx], self.data[neg_idx]]
+        imgs = [self.dataset.__getitem__(anchor_indx)[0], 
+                self.dataset.__getitem__(pos_idx)[0], 
+                self.dataset.__getitem__(neg_idx)[0]]
+        
         for i in range(len(imgs)):
-            mode = 'L' if len(imgs[i].shape) == 2 else 'RGB'
-            imgs[i] = Image.fromarray(imgs[i], mode=mode)
 
             if self.transform is not None:
                 imgs[i] = self.transform(imgs[i])
@@ -310,9 +311,8 @@ class TripletDataset(torch.utils.data.Dataset):
 
 class ContrastiveDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data, targets, indexes, transform):
-        self.data = data
-        self.targets = targets
+    def __init__(self, dataset, indexes, transform):
+        self.dataset = dataset
         self.indexes = indexes
         self.transform = transform
         
@@ -321,8 +321,6 @@ class ContrastiveDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         org_idx = self.indexes[idx]
-        img, target = self.data[org_idx], int(self.targets[org_idx])
-        mode = 'L' if len(img.shape) == 2 else 'RGB'
-        img = Image.fromarray(img, mode=mode)
+        img, target = self.dataset.__getitem__(org_idx)
 
         return self.transform(img), self.transform(img), target
