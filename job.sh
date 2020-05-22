@@ -27,7 +27,7 @@ pip install --no-index --upgrade pip
 pip install --no-index -r requirements.txt
 
 
-python main.py --batch-size 256 --epochs 200 --model-type softmax \
+python main.py --batch-size 128 --epochs 200 --model-type softmax \
 --tasks 1 --dataset imagenet --unlabeled-dataset imagenet --data-path ILSVRC/Data/CLS-LOC \
 --log-interval 100 --test-interval 5 --gpu 0
 
