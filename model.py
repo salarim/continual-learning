@@ -12,6 +12,6 @@ def get_model(args):
     elif args.dataset == 'imagenet':
         model = resnet18(num_classes=1000, high_resolusion=True)
     else:
-        raise ValueError('dataset is not supported.'))
-    
+        raise ValueError('dataset is not supported.')
+
     return model
