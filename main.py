@@ -36,7 +36,7 @@ parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--test-interval', type=int, default=1, metavar='N',
                     help='how many batches to wait before testing model')
-parser.add_argument('--acc-per-class', action='store_true', default=False,
+parser.add_argument('--acc-per-task', action='store_true', default=False,
                     help='log accuracy of model per class')
 
 parser.add_argument('--save-model', action='store_true', default=False,
