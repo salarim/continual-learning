@@ -12,13 +12,13 @@ from models.contrastive_wrapper import ProjectiveWrapper
 from models.nearest_prototype import NearestPrototype
 from optim import ContrastiveLoss
 from test_contrastive import test_contrastive
-from visualize import plot_embedding_tsne
+# from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
     proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
     nearest_proto_model = NearestPrototype(sigma=0.3)
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07) # TODO
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07, 0.0) # TODO
     optimizer = optim.SGD(proj_model.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.weight_decay)
 
@@ -86,11 +86,11 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
             output = nearest_proto_model.predict(cur_feats)
             it_acc = (output == target).sum().item() / data.shape[0] 
             acc.update(it_acc, data.size(0))
-        print('Train task{:2d} Acc: {acc.avg:.3f}'.format((task_idx+1), acc=acc))
+        logger.info('Train task{:2d} Acc: {acc.avg:.3f}'.format((task_idx+1), acc=acc))
 
         test_contrastive(args, model, nearest_proto_model, device, test_loader_creator, logger)
 
-        plot_embedding_tsne(args, task_idx, train_loader_creator_l, model, device)
+        # plot_embedding_tsne(args, task_idx, train_loader_creator_l, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
             torch.save(model.state_dict(), model_path)

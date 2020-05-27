@@ -45,13 +45,14 @@ def triplet_loss(anchor_emb, pos_emb, neg_emb, target, margin=0.02):
 
 class ContrastiveLoss(torch.nn.Module):
 
-    def __init__(self, device, batch_size_l, batch_size_u, temperature):
+    def __init__(self, device, batch_size_l, batch_size_u, temperature, sup_loss_coef=0.5):
         super(ContrastiveLoss, self).__init__()
         self.device = device
         self.batch_size_l = batch_size_l
         self.batch_size_u = batch_size_u
         self.batch_size = batch_size_l + batch_size_u
         self.temperature = temperature
+        self.sup_loss_coef = sup_loss_coef
 
         self._cosine_similarity = torch.nn.CosineSimilarity(dim=-1)
 
@@ -78,7 +79,8 @@ class ContrastiveLoss(torch.nn.Module):
         sup_similarity_matrix = self_sup_similarity_matrix[:self.batch_size_l, :self.batch_size_l]
         sup_loss = self._sup_loss(sup_similarity_matrix, targets_l)
 
-        return self_sup_loss + sup_loss
+        loss = self.sup_loss_coef * sup_loss + (1.0 - self.sup_loss_coef) * self_sup_loss
+        return loss
 
     def _update_batch_size(self, zis_l, zjs_l, zis_u, zjs_u, targets_l):
         assert zis_l.shape[0] == zjs_l.shape[0]

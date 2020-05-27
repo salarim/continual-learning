@@ -22,8 +22,8 @@ def test_contrastive(args, model, nearest_proto_model, device, test_loader_creat
                 tasks_acc[task_idx].update(it_acc, data.size(0))
     
     if args.acc_per_task:
-        print('Tess Acc per task:', end=' ')
+        tasks_acc_str = 'Tess Acc per task: '
         for i, task_acc in enumerate(tasks_acc):
-            print('Task{:2d} Acc: {acc.avg:.3f}'.format((i+1), acc=task_acc), end='\t')
-        print()
-    print('Test Acc: {acc.avg:.3f}'.format(acc=acc))
+            tasks_acc_str += 'Task{:2d} Acc: {acc.avg:.3f}'.format((i+1), acc=task_acc) + '\t'
+        logger.info(tasks_acc_str)
+    logger.info('Test Acc: {acc.avg:.3f}'.format(acc=acc))
