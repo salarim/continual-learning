@@ -44,5 +44,15 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
     palette = sns.color_palette("bright", np.unique(targets).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
     plt.savefig(dir_name + 'all.png')
+
+    tasks_targets = np.array(data_loader_creator.tasks_targets)
+    tmp = np.zeros((tasks_targets.shape[0], targets.shape[0]))
+    for i in range(tasks_targets.shape[0]):
+        tmp[i] = np.isin(targets, tasks_targets[i])
+    data_task = np.where(tmp.T == 1.)[1]
+    plt.figure()
+    palette = sns.color_palette("bright", len(tasks_targets))
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=data_task, legend='full', palette=palette, s=20)
+    plt.savefig(dir_name + 'all_tasks.png')
     print('Visualization Ended.')
 
