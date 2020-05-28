@@ -7,8 +7,7 @@ from log_utils import makedirs
 
 
 def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
-    embedding_size = model.classifier.in_features
-    X = np.empty((0,embedding_size), dtype=np.float32)
+    X = None
     targets = np.empty((0))
     with torch.no_grad():
         for data_loader in data_loader_creator.data_loaders:
@@ -25,7 +24,10 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
                 embedding = model.get_embedding(data)
                 embedding = embedding.cpu().detach().numpy()
                 target = target.cpu().detach().numpy()
-                X = np.append(X, embedding, axis=0)
+                if X is None:
+                    X = embedding
+                else:
+                    X = np.append(X, embedding, axis=0)
                 targets = np.append(targets, target)
     
     X_tsne = TSNE().fit_transform(X)
@@ -45,7 +47,8 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
     plt.savefig(dir_name + 'all.png')
 
-    tasks_targets = np.array(data_loader_creator.tasks_targets)
+    # tasks_targets = np.array(data_loader_creator.tasks_targets)
+    tasks_targets = np.array([[0,1,2,3,4], [5,6,7,8,9]])
     tmp = np.zeros((tasks_targets.shape[0], targets.shape[0]))
     for i in range(tasks_targets.shape[0]):
         tmp[i] = np.isin(targets, tasks_targets[i])
