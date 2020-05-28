@@ -8,7 +8,6 @@ from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
 from log_utils import AverageMeter
-from models.contrastive_wrapper import ProjectiveWrapper
 from models.nearest_prototype import NearestPrototype
 from optim import ContrastiveLoss
 from test_contrastive import test_contrastive
@@ -16,10 +15,9 @@ from test_contrastive import test_contrastive
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
-    proj_model = ProjectiveWrapper(model, output_dim=64).to(device) # TODO
     nearest_proto_model = NearestPrototype(sigma=0.3)
     criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07, 0.0) # TODO
-    optimizer = optim.SGD(proj_model.parameters(), lr=args.lr,
+    optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.weight_decay)
 
     train_loaders_l = train_loader_creator_l.data_loaders
@@ -48,8 +46,8 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 data_u_1, data_u_2 = data_u_1.to(device), data_u_2.to(device)
                 optimizer.zero_grad()
 
-                output_l_1, output_l_2 = proj_model(data_l_1), proj_model(data_l_2)
-                output_u_1, output_u_2 = proj_model(data_u_1), proj_model(data_u_2)
+                output_l_1, output_l_2 = model(data_l_1), model(data_l_2)
+                output_u_1, output_u_2 = model(data_u_1), model(data_u_2)
 
                 loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
 

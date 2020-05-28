@@ -1,5 +1,6 @@
 from models.simple import SimpleNet
 from models.resnet import resnet18
+from models.contrastive_wrapper import ProjectiveWrapper
 
 def get_model(args):
 
@@ -13,5 +14,12 @@ def get_model(args):
         model = resnet18(num_classes=1000, high_resolusion=True)
     else:
         raise ValueError('dataset is not supported.')
+
+    if args.model_type == 'contrastive':
+        model = ProjectiveWrapper(model, output_dim=64) #TODO output_dim
+
+    if args.model_path:
+        state_dict = torch.load(args.model_path)
+        model.load_state_dict(state_dict)
 
     return model
