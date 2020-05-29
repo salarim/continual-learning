@@ -16,7 +16,7 @@ from test_contrastive import test_contrastive
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
     nearest_proto_model = NearestPrototype(sigma=0.3)
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.07, 0.0) # TODO
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, 0.0) # TODO
     optimizer = optim.SGD(model.parameters(), lr=args.lr,
                           momentum=0.9, weight_decay=args.weight_decay)
 
