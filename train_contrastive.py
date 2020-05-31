@@ -11,7 +11,7 @@ from log_utils import AverageMeter
 from models.nearest_prototype import NearestPrototype
 from optim import ContrastiveLoss
 from test_contrastive import test_contrastive
-# from visualize import plot_embedding_tsne
+from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
@@ -46,8 +46,8 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 data_u_1, data_u_2 = data_u_1.to(device), data_u_2.to(device)
                 optimizer.zero_grad()
 
-                output_l_1, output_l_2 = model(data_l_1), model(data_l_2)
-                output_u_1, output_u_2 = model(data_u_1), model(data_u_2)
+                (_, output_l_1), (_, output_l_2) = model(data_l_1), model(data_l_2)
+                (_, output_u_1), (_, output_u_2) = model(data_u_1), model(data_u_2)
 
                 loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
 
@@ -73,14 +73,16 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
             data, target = data.to(device), target.to(device)
             prev_feats = None
             if task_idx > 0:
-                prev_feats = old_model.get_embedding(data).detach()
-            cur_feats = model.get_embedding(data).detach()
+                prev_feats, _ = old_model(data)
+                prev_feats = prev_feats.detach()
+            cur_feats, _ = model(data)
+            cur_feats = cur_feats.detach()
             nearest_proto_model.add_features(task_idx, prev_feats, cur_feats, target)
 
         acc = AverageMeter()
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
             data, target = data.to(device), target.to(device)
-            cur_feats = model.get_embedding(data)
+            cur_feats, _ = model(data)
             output = nearest_proto_model.predict(cur_feats)
             it_acc = (output == target).sum().item() / data.shape[0] 
             acc.update(it_acc, data.size(0))
@@ -88,7 +90,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
 
         test_contrastive(args, model, nearest_proto_model, device, test_loader_creator, logger)
 
-        # plot_embedding_tsne(args, task_idx, train_loader_creator_l, model, device)
+        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
             torch.save(model.state_dict(), model_path)

@@ -21,7 +21,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
                     data = data[:,0]
                     
                 data = data.to(device)
-                embedding = model.get_embedding(data)
+                embedding, _ = model(data)
                 embedding = embedding.cpu().detach().numpy()
                 target = target.cpu().detach().numpy()
                 if X is None:

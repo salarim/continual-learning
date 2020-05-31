@@ -18,40 +18,11 @@ class ProjectiveWrapper(nn.Module):
         self.l2 = nn.Linear(num_ftrs, output_dim)
 
     def forward(self, x):
-        x = self.model.get_embedding(x)
+        h, _ = self.model(x)
+        # h = F.normalize(h, dim=1)
 
-        x = F.normalize(x, dim=1)
-
-        x = self.l1(x)
-        x = self.relu(x)
-        x = self.l2(x)
+        o = self.l1(h)
+        o = self.relu(o)
+        o = self.l2(o)
         
-        return x
-
-    def get_embedding(self, x):
-        return self.forward(x)
-
-
-class LinearWrapper(nn.Module):
-
-    def __init__(self, model, num_classes):
-        super(LinearWrapper, self).__init__()
-        self.model = model
-
-        num_ftrs = model.classifier.in_features
-        self.classifier = MultiHeadLinear(num_ftrs, num_classes, no_grad=False)
-        
-
-    def forward(self, x):
-        x = self.get_embedding(x)
-
-        x = self.classifier(x)
-        
-        return x
-
-    def get_embedding(self, x):
-        x = self.model.get_embedding(x)
-
-        x = F.normalize(x, dim=1)
-
-        return x
+        return h, o

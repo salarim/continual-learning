@@ -37,7 +37,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, logger
                 data, target = data.to(device), target.to(device)
                 optimizer.zero_grad()
 
-                output = model(data)
+                _, output = model(data)
 
                 loss = criterion(output, target)
 

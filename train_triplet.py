@@ -29,7 +29,7 @@ def train_triplet(args, model, device, train_loader_creator, test_loader_creator
 
                 embeddings = []
                 for i in range(3):
-                    embedding = model.get_embedding(data[:,i])
+                    embedding, _ = model(data[:,i])
                     embeddings.append(embedding)
                 anchor_emb, pos_emb, neg_emb = embeddings[0], embeddings[1], embeddings[2]
 

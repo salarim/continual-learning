@@ -18,7 +18,7 @@ def test(args, model, device, test_loader_creator, logger):
             for data, target in test_loader:
 
                 data, target = data.to(device), target.to(device)
-                output = model(data)
+                _, output = model(data)
 
                 loss = criterion(output, target)
 

@@ -13,11 +13,11 @@ class SimpleNet(nn.Module):
         self.classifier = nn.Linear(128, 10)
 
     def forward(self, x):
-        x = self.get_embedding(x)
+        h = self.get_embedding(x)
 
-        x = self.classifier(x)
+        o = self.classifier(h)
         
-        return x
+        return h, o
 
     def get_embedding(self, x):
         x = F.dropout(self.conv1(x), training=True, p=self.dropout_p)

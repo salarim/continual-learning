@@ -15,7 +15,7 @@ def test_contrastive(args, model, nearest_proto_model, device, test_loader_creat
 
             for batch_idx, (data, _, target) in enumerate(test_loader_l):
                 data, target = data.to(device), target.to(device)
-                cur_feats = model.get_embedding(data)
+                cur_feats, _ = model(data)
                 output = nearest_proto_model.predict(cur_feats)
                 it_acc = (output == target).sum().item() / data.shape[0] 
                 acc.update(it_acc, data.size(0))

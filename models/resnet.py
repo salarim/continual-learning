@@ -229,11 +229,11 @@ class ResNet(nn.Module):
         return x
 
     def forward(self, x):
-        features =  self.get_embedding(x)
+        h =  self.get_embedding(x)
 
-        output = self.classifier(features)
+        o = self.classifier(h)
 
-        return output
+        return h, o
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
