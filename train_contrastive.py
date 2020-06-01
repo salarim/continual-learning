@@ -11,7 +11,7 @@ from log_utils import AverageMeter
 from models.nearest_prototype import NearestPrototype
 from optim import ContrastiveLoss
 from test_contrastive import test_contrastive
-# from visualize import plot_embedding_tsne
+from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
@@ -90,7 +90,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
 
         test_contrastive(args, model, nearest_proto_model, device, test_loader_creator, logger)
 
-        # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
+        plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
             if isinstance(model, torch.nn.DataParallel):
