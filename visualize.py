@@ -1,9 +1,13 @@
 import torch
 import numpy as np
-from tsnecuda import TSNE
 import seaborn as sns
 import matplotlib.pyplot as plt
 from log_utils import makedirs
+
+try:
+    from tsnecuda import TSNE
+except ImportError:
+    from sklearn.manifold import TSNE
 
 
 def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
