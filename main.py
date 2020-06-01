@@ -127,9 +127,6 @@ def main():
                                             batch_size=args.test_batch_size, exemplar_size=0)
     test_loader_creator = DataLoaderConstructor(test_loader_creator_config)
 
-    if args.save_model:
-        torch.save(model.state_dict(), "initial.pt")
-
     args.vis_base_dir = 'plots/' + log_file + '/'
     if args.model_type == 'softmax':
         train(args, model, device, train_loader_creator,

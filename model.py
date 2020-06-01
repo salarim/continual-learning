@@ -1,3 +1,5 @@
+import torch
+
 from models.simple import SimpleNet
 from models.resnet import resnet18
 from models.contrastive_wrapper import ProjectiveWrapper

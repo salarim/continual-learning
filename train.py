@@ -67,4 +67,7 @@ def train(args, model, device, train_loader_creator, test_loader_creator, logger
         # plot_embedding_tsne(args, task_idx, test_loader_creator, model, device)
         if args.save_model:
             model_path = args.vis_base_dir.split('/')[-2] + 'T' + str(task_idx+1) + '.pt'
-            torch.save(model.state_dict(), model_path)
+            if isinstance(model, torch.nn.DataParallel):
+                torch.save(model.module.state_dict(), model_path)
+            else:
+                torch.save(model.state_dict(), model_path)
