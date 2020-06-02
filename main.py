@@ -69,6 +69,9 @@ parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
 parser.add_argument('--gpu', default=None, type=int,
                 help='GPU id to use.')
 
+parser.add_argument('--sup-coef', type=float, default=0.5, metavar='LR',
+                    help='Supervised coefficient in ContrastiveLoss. (default: 0.5)')
+
 
 def main():
     args = parser.parse_args()

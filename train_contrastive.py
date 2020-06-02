@@ -16,7 +16,7 @@ from visualize import plot_embedding_tsne
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
     nearest_proto_model = NearestPrototype(sigma=0.3)
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, 0.5) # TODO
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, args.sup_coef) # TODO
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     train_loaders_l = train_loader_creator_l.data_loaders
@@ -66,7 +66,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                         'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
                             task_idx+1, epoch, batch_idx, len(train_loader_l),
                             batch_time=batch_time, data_time=data_time, loss=losses))
-                
+
                 if epoch >= args.cosine_annealing_warmup:
                     scheduler.step()
 
