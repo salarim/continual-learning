@@ -28,6 +28,8 @@ parser.add_argument('--lr', type=float, default=0.1, metavar='LR',
 parser.add_argument('--gamma', type=float, default=0.2, metavar='M',
                     help='Learning rate step gamma (default: 0.2)')
 parser.add_argument('--milestones', type=int, default=[60, 120, 160], nargs='+')
+parser.add_argument('--cosine-annealing-warmup', type=int, default=10, metavar='N',
+                    help='number of epochs for CosineAnnealingLR scheduler(default: 10)')
 parser.add_argument('--weight-decay', type=float, default=5e-4,
                     help='Optimizer weight dacay (default: 5e-4)')
 parser.add_argument('--seed', default=None, type=int,

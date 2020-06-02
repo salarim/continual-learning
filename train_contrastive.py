@@ -16,9 +16,8 @@ from visualize import plot_embedding_tsne
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
     nearest_proto_model = NearestPrototype(sigma=0.3)
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, 0.0) # TODO
-    optimizer = optim.SGD(model.parameters(), lr=args.lr,
-                          momentum=0.9, weight_decay=args.weight_decay)
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, 0.5) # TODO
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     train_loaders_l = train_loader_creator_l.data_loaders
     train_loaders_u = train_loader_creator_u.data_loaders
@@ -26,7 +25,8 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = args.lr
-        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(train_loader_l)\
+                    * (args.epochs - args.cosine_annealing_warmup))
         
         old_model = copy.deepcopy(model)
 
@@ -66,8 +66,9 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                         'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
                             task_idx+1, epoch, batch_idx, len(train_loader_l),
                             batch_time=batch_time, data_time=data_time, loss=losses))
-
-            scheduler.step()
+                
+                if epoch >= args.cosine_annealing_warmup:
+                    scheduler.step()
 
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
             data, target = data.to(device), target.to(device)
