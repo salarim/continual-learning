@@ -10,31 +10,8 @@ except ImportError:
     from sklearn.manifold import TSNE
 
 
-def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
-    X = None
-    targets = np.empty((0))
-    with torch.no_grad():
-        for data_loader in data_loader_creator.data_loaders:
-            for data_target in data_loader:
-                if data_loader_creator.config.dataset_type in ['softmax', 'triplet']:
-                    data, target = data_target
-                elif data_loader_creator.config.dataset_type == 'contrastive':
-                    data, _, target = data_target
-
-                if data_loader_creator.config.dataset_type == 'triplet':
-                    data = data[:,0]
-                    
-                data = data.to(device)
-                embedding, _ = model(data)
-                embedding = embedding.cpu().detach().numpy()
-                target = target.cpu().detach().numpy()
-                if X is None:
-                    X = embedding
-                else:
-                    X = np.append(X, embedding, axis=0)
-                targets = np.append(targets, target)
-    
-    X_tsne = TSNE().fit_transform(X)
+def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, nearest_proto_model=None):
+    X_tsne, targets, outputs = extract_tsne_features(data_loader_creator, model, device, nearest_proto_model)
 
     dir_name = args.vis_base_dir + 'T' + str(task_id+1) + '/'
     makedirs(dir_name)
@@ -61,5 +38,51 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device):
     palette = sns.color_palette("bright", len(tasks_targets))
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=data_task, legend='full', palette=palette, s=20)
     plt.savefig(dir_name + 'all_tasks.png')
+
+    
+    plt.figure()
+    palette = sns.color_palette("bright", np.unique(outputs).shape[0])
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=outputs, legend='full', palette=palette, s=20)
+    plt.savefig(dir_name + 'preds.png')
+
+    plt.figure()
+    palette = sns.color_palette("bright", 2)
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=(outputs==targets).astype(int), legend='full', palette=palette, s=20)
+    plt.savefig(dir_name + 'correctness.png')
+
     print('Visualization Ended.')
 
+def extract_tsne_features(data_loader_creator, model, device, nearest_proto_model=None):
+    X = None
+    outputs = None
+    targets = np.empty((0))
+    with torch.no_grad():
+        for data_loader in data_loader_creator.data_loaders:
+            for data_target in data_loader:
+                if data_loader_creator.config.dataset_type in ['softmax', 'triplet']:
+                    data, target = data_target
+                elif data_loader_creator.config.dataset_type == 'contrastive':
+                    data, _, target = data_target
+
+                if data_loader_creator.config.dataset_type == 'triplet':
+                    data = data[:,0]
+                    
+                data = data.to(device)
+                embedding, output = model(data)
+                output = torch.argmax(output, dim=1)
+                if nearest_proto_model is not None:
+                    output = nearest_proto_model.predict(embedding)
+                embedding = embedding.cpu().detach().numpy()
+                output = output.cpu().detach().numpy()
+                target = target.cpu().detach().numpy()
+                if X is None:
+                    X = embedding
+                    outputs = output
+                else:
+                    X = np.append(X, embedding, axis=0)
+                    outputs = np.append(outputs, output, axis=0)
+                targets = np.append(targets, target)
+    
+    X_tsne = TSNE().fit_transform(X)
+
+    return X_tsne, targets, outputs
