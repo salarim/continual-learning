@@ -5,8 +5,8 @@ class NearestPrototypes:
 
     def __init__(self, sigma):
         self.sigma = sigma
-        self.proto_size = 1 #TODO
-        self.k = 1 #TODO
+        self.proto_size = 100 #TODO
+        self.k = 5 #TODO
 
         self.task_class_prototypes = {}
         self.cur_task_feats = None
