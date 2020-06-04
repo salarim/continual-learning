@@ -94,13 +94,13 @@ def extract_tsne_features(data_loader_creator, model, device, nearest_proto_mode
                 targets = np.append(targets, target)
 
     protos = np.empty((0, X.shape[1]))
-    protos_targets = np.empty((0))
+    protos_targets = np.empty((0), dtype=np.int)
     if nearest_proto_model is not None:
         last_task = max(nearest_proto_model.task_class_prototypes.keys(), default=-1)
         for target, feats in nearest_proto_model.task_class_prototypes[last_task].items():
             if isinstance(nearest_proto_model, NearestPrototype):
-                feats = feats[0].cpu().detach().numpy()
-                protos = np.append(protos, feats)
+                feats = feats[0].unsqueeze(0).cpu().detach().numpy()
+                protos = np.append(protos, feats, axis=0)
                 protos_targets = np.append(protos_targets, target)
             elif isinstance(nearest_proto_model, NearestPrototypes):
                 feats = feats.cpu().detach().numpy()
