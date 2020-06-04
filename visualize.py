@@ -3,6 +3,8 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from log_utils import makedirs
+from models.nearest_prototype import NearestPrototype
+from models.nearest_prototypes import NearestPrototypes
 
 try:
     from tsnecuda import TSNE
@@ -11,7 +13,8 @@ except ImportError:
 
 
 def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, nearest_proto_model=None):
-    X_tsne, targets, outputs = extract_tsne_features(data_loader_creator, model, device, nearest_proto_model)
+    X_tsne, targets, outputs, protos_tsne, protos_targets = extract_tsne_features(data_loader_creator, 
+                                                                model, device, nearest_proto_model)
 
     dir_name = args.vis_base_dir + 'T' + str(task_id+1) + '/'
     makedirs(dir_name)
@@ -26,6 +29,8 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     plt.figure()
     palette = sns.color_palette("bright", np.unique(targets).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
+    if nearest_proto_model is not None:
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
     plt.savefig(dir_name + 'all.png')
 
     # tasks_targets = np.array(data_loader_creator.tasks_targets)
@@ -43,11 +48,16 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     plt.figure()
     palette = sns.color_palette("bright", np.unique(outputs).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=outputs, legend='full', palette=palette, s=20)
+    if nearest_proto_model is not None:
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
     plt.savefig(dir_name + 'preds.png')
 
     plt.figure()
     palette = sns.color_palette("bright", 2)
-    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=(outputs==targets).astype(int), legend='full', palette=palette, s=20)
+    sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=(outputs==targets).astype(int)-2, legend='full', palette=palette, s=20)
+    if nearest_proto_model is not None:
+        palette = sns.color_palette("bright", np.unique(protos_targets).shape[0])
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
     plt.savefig(dir_name + 'correctness.png')
 
     print('Visualization Ended.')
@@ -82,7 +92,27 @@ def extract_tsne_features(data_loader_creator, model, device, nearest_proto_mode
                     X = np.append(X, embedding, axis=0)
                     outputs = np.append(outputs, output, axis=0)
                 targets = np.append(targets, target)
-    
+
+    protos = np.empty((0, X.shape[1]))
+    protos_targets = np.empty((0))
+    if nearest_proto_model is not None:
+        last_task = max(nearest_proto_model.task_class_prototypes.keys(), default=-1)
+        for target, feats in nearest_proto_model.task_class_prototypes[last_task].items():
+            if isinstance(nearest_proto_model, NearestPrototype):
+                feats = feats[0].cpu().detach().numpy()
+                protos = np.append(protos, feats)
+                protos_targets = np.append(protos_targets, target)
+            elif isinstance(nearest_proto_model, NearestPrototypes):
+                feats = feats.cpu().detach().numpy()
+                protos = np.append(protos, feats, axis=0)
+                target_targets = np.full((feats.shape[0]), target)
+                protos_targets = np.append(protos_targets, target_targets)
+
+    X = np.append(X, protos, axis=0)
+
     X_tsne = TSNE().fit_transform(X)
 
-    return X_tsne, targets, outputs
+    protos_tsne = X_tsne[-protos.shape[0]:]
+    X_tsne = X_tsne[:-protos.shape[0]]
+
+    return X_tsne, targets, outputs, protos_tsne, protos_targets
