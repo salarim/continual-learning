@@ -30,7 +30,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     palette = sns.color_palette("bright", np.unique(targets).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
-        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'all.png')
 
     # tasks_targets = np.array(data_loader_creator.tasks_targets)
@@ -49,15 +49,15 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     palette = sns.color_palette("bright", np.unique(outputs).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=outputs, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
-        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'preds.png')
 
     plt.figure()
-    palette = sns.color_palette("bright", 2)
+    palette = sns.color_palette("Greys", 2)
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=(outputs==targets).astype(int)-2, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
         palette = sns.color_palette("bright", np.unique(protos_targets).shape[0])
-        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=40, marker='X')
+        sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=30, marker='X')
     plt.savefig(dir_name + 'correctness.png')
 
     print('Visualization Ended.')
