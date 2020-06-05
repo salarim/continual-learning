@@ -8,9 +8,11 @@ from torch.optim.lr_scheduler import MultiStepLR
 from termcolor import cprint
 
 from log_utils import AverageMeter
+from models.nearest_prototypes import NearestPrototypes
 from models.nearest_prototype import NearestPrototype
 from optim import ContrastiveLoss
 from test_contrastive import test_contrastive
+from test import accuracy
 from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
@@ -90,6 +92,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
         logger.info('Train task{:2d} Acc: {acc.avg:.3f}'.format((task_idx+1), acc=acc))
 
         test_contrastive(args, model, nearest_proto_model, device, test_loader_creator, logger)
+        test_features(args, model, device, train_loader_creator_l, test_loader_creator, logger)
 
         plot_embedding_tsne(args, task_idx, test_loader_creator, model, device, nearest_proto_model)
         if args.save_model:
@@ -98,3 +101,82 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 torch.save(model.module.state_dict(), model_path)
             else:
                 torch.save(model.state_dict(), model_path)
+
+def test_features(args, model, device, train_loader_creator_l, test_loader_creator, logger):
+    logger.info('Evaluating linear model Began.')
+    if isinstance(model, torch.nn.DataParallel):
+        num_ftrs = model.module.model.classifier.in_features
+        num_out = model.module.model.classifier.out_features
+    else:
+        num_ftrs = model.model.classifier.in_features
+        num_out = model.model.classifier.out_features
+    linear_model = torch.nn.Linear(num_ftrs, num_out).to(device)
+
+    lr = 0.1
+    epochs = 10
+    criterion = torch.nn.CrossEntropyLoss().to(device)
+    optimizer = optim.SGD(linear_model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+
+    for task_idx, train_loader in enumerate(train_loader_creator_l.data_loaders):
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+        scheduler = MultiStepLR(optimizer, milestones=args.milestones, gamma=args.gamma)
+
+        for epoch in range(1,epochs+1):
+            
+            linear_model.train()
+            losses = AverageMeter()
+            acc = AverageMeter()
+
+            for batch_idx, (data, _, target) in enumerate(train_loader):
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
+
+                h = model(data)[0].detach()
+                output = linear_model(h)
+
+                loss = criterion(output, target)
+
+                loss.backward()                
+                optimizer.step()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+                if batch_idx % args.log_interval == 0:
+                    logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
+                        'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                        'Acc {acc.val:.3f} ({acc.avg:.3f})'.format(
+                            task_idx+1, epoch, batch_idx, len(train_loader), loss=losses, acc=acc))
+
+            scheduler.step()
+
+    linear_model.eval()
+
+    with torch.no_grad():
+        losses = AverageMeter()
+        acc = AverageMeter()
+        
+        for test_loader in test_loader_creator.data_loaders:
+
+            for data, _, target in test_loader:
+
+                data, target = data.to(device), target.to(device)
+                h = model(data)[0].detach()
+                output = linear_model(h)
+
+                loss = criterion(output, target)
+
+                output = output.float()
+                loss = loss.float()
+
+                it_acc = accuracy(output.data, target)[0]
+                losses.update(loss.item(), data.size(0))
+                acc.update(it_acc.item(), data.size(0))
+
+    logger.info('Test set: Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                'Acc {acc.avg:.3f}'.format(
+                loss=losses, acc=acc))
+    logger.info('Evaluating linear model Finished.')
