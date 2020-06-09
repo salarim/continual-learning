@@ -89,7 +89,7 @@ class DataLoaderConstructor:
         transforms = []
         if self.config.train:
             if dataset_name in ['cifar10', 'cifar100']:
-                transforms.extend([torchvision.transforms.RandomCrop(32, padding=4),
+                transforms.extend([torchvision.transforms.RandomResizedCrop(32),
                                     torchvision.transforms.RandomHorizontalFlip()])
             elif dataset_name == 'imagenet':
                 transforms.extend([torchvision.transforms.RandomResizedCrop(224),
@@ -100,12 +100,7 @@ class DataLoaderConstructor:
                                    torchvision.transforms.CenterCrop(224)])
 
         if self.config.dataset_type == 'contrastive':
-            color_jitter = torchvision.transforms.ColorJitter(0.8, 0.8, 0.8, 0.2)
-
-            transforms.extend([torchvision.transforms.RandomApply([color_jitter], p=0.8),
-                               torchvision.transforms.RandomGrayscale(p=0.2),
-                               GaussianBlur(kernel_size=int(0.1 * input_shape[dataset_name][0]))
-                               ])
+            transforms.extend([torchvision.transforms.ColorJitter(0.5, 0.5, 0.5, 0.5)])
         
         transforms.extend([torchvision.transforms.ToTensor(),
                             torchvision.transforms.Normalize(means[dataset_name],

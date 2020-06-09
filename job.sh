@@ -2,11 +2,11 @@
 #SBATCH --mail-user=salari.m1375@gmail.com
 #SBATCH --mail-type=ALL
 #SBATCH --account=def-mori_gpu
-#SBATCH --job-name=contrastive-1task-self-sup
+#SBATCH --job-name=contrastive-1task-self-sup-lr0.001-pietz-aug
 #SBATCH --output=%x-%j.out
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=05:00:00
+#SBATCH --time=02:59:00
 #SBATCH --mem=0
 #SBATCH --gres=gpu:p100l:4
 #SBATCH --cpus-per-task=12
@@ -29,9 +29,9 @@ pip install --no-index -r requirements.txt
 
 # sup_coef=`echo "$SLURM_ARRAY_TASK_ID/20" | bc -l`
 
-python main.py --lr 3e-4 --batch-size 512 --weight-decay 1e-5 --epochs 80 \
+python main.py --lr 1e-3 --batch-size 512 --weight-decay 0.0 --epochs 80 \
 --model-type contrastive --tasks 1 --dataset cifar10 --unlabeled-dataset cifar10 \
---log-interval 100 --test-interval 5 --milestones 5 --gamma 0.1 \
+--log-interval 90 --test-interval 5 --milestones 5 --gamma 0.1 \
 --sup-coef 0.0 --save-model
 
 cp experiments/* ~/scratch/continual-learning/experiments
