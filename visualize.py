@@ -30,11 +30,12 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     palette = sns.color_palette("bright", np.unique(targets).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
+        palette = [x for i,x in enumerate(palette) if i in np.unique(protos_targets)]
         sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'all.png')
 
-    # tasks_targets = np.array(data_loader_creator.tasks_targets)
-    tasks_targets = np.array([[0,1,2,3,4], [5,6,7,8,9]])
+    tasks_targets = np.array(data_loader_creator.tasks_targets)
+    # tasks_targets = np.array([[0,1,2,3,4], [5,6,7,8,9]])
     tmp = np.zeros((tasks_targets.shape[0], targets.shape[0]))
     for i in range(tasks_targets.shape[0]):
         tmp[i] = np.isin(targets, tasks_targets[i])
@@ -65,7 +66,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
 def extract_tsne_features(data_loader_creator, model, device, nearest_proto_model=None):
     X = None
     outputs = None
-    targets = np.empty((0))
+    targets = np.empty((0), dtype=np.int)
     with torch.no_grad():
         for data_loader in data_loader_creator.data_loaders:
             for data_target in data_loader:
