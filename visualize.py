@@ -25,14 +25,16 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
         idx = np.isin(targets, task)
         sns_plot = sns.scatterplot(X_tsne[idx,0], X_tsne[idx,1], hue=targets[idx], legend='full', palette=palette, s=20)
         plt.savefig(dir_name + 'T' + str(t_id+1) + '.png')
+        plt.close()
 
     plt.figure()
     palette = sns.color_palette("bright", np.unique(targets).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=targets, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
-        palette = [x for i,x in enumerate(palette) if i in np.unique(protos_targets)]
+        palette = sns.color_palette("bright", np.unique(protos_targets).shape[0])
         sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'all.png')
+    plt.close()
 
     tasks_targets = np.array(data_loader_creator.tasks_targets)
     # tasks_targets = np.array([[0,1,2,3,4], [5,6,7,8,9]])
@@ -44,15 +46,17 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     palette = sns.color_palette("bright", len(tasks_targets))
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=data_task, legend='full', palette=palette, s=20)
     plt.savefig(dir_name + 'all_tasks.png')
+    plt.close()
 
     
     plt.figure()
     palette = sns.color_palette("bright", np.unique(outputs).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=outputs, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
-        palette = [x for i,x in enumerate(palette) if i in np.unique(protos_targets)]
+        palette = sns.color_palette("bright", np.unique(protos_targets).shape[0])
         sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'preds.png')
+    plt.close()
 
     plt.figure()
     palette = sns.color_palette("Greys", 2)
@@ -61,6 +65,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
         palette = sns.color_palette("bright", np.unique(protos_targets).shape[0])
         sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend='full', palette=palette, s=30, marker='X')
     plt.savefig(dir_name + 'correctness.png')
+    plt.close()
 
     print('Visualization Ended.')
 
