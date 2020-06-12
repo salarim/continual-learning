@@ -50,6 +50,7 @@ def plot_embedding_tsne(args, task_id, data_loader_creator, model, device, neare
     palette = sns.color_palette("bright", np.unique(outputs).shape[0])
     sns_plot = sns.scatterplot(X_tsne[:,0], X_tsne[:,1], hue=outputs, legend='full', palette=palette, s=20)
     if nearest_proto_model is not None:
+        palette = [x for i,x in enumerate(palette) if i in np.unique(protos_targets)]
         sns_plot = sns.scatterplot(protos_tsne[:,0], protos_tsne[:,1], hue=protos_targets, legend=False, palette=palette, s=30, marker='X', edgecolor='black')
     plt.savefig(dir_name + 'preds.png')
 
