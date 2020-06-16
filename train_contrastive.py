@@ -10,7 +10,7 @@ from termcolor import cprint
 from log_utils import AverageMeter
 from models.nearest_prototypes import NearestPrototypes
 from models.nearest_prototype import NearestPrototype
-from optim import ContrastiveLoss
+from optim import ContrastiveLoss, warmup_learning_rate
 from test_contrastive import test_contrastive
 from test import accuracy
 from visualize import plot_embedding_tsne
@@ -18,8 +18,8 @@ from visualize import plot_embedding_tsne
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
     nearest_proto_model = NearestPrototype(sigma=0.3)
-    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, 0.5, args.sup_coef) # TODO
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, args.temp, args.sup_coef)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 
     train_loaders_l = train_loader_creator_l.data_loaders
     train_loaders_u = train_loader_creator_u.data_loaders
@@ -27,14 +27,17 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
 
         for param_group in optimizer.param_groups:
             param_group['lr'] = args.lr
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=args.lr, T_max=len(train_loader_l)\
-                    * (args.epochs - args.cosine_annealing_warmup) + 1)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 
+                                                               eta_min=args.lr * (args.gamma ** 3), 
+                                                               T_max=args.epochs)
         
         old_model = copy.deepcopy(model)
 
         for epoch in range(1,args.epochs+1):
             
             model.train()
+            scheduler.step()
+            
             losses = AverageMeter()
             batch_time = AverageMeter()
             data_time = AverageMeter()
@@ -52,8 +55,9 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 (_, output_u_1), (_, output_u_2) = model(data_u_1), model(data_u_2)
 
                 loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
+                loss.backward()
 
-                loss.backward()                
+                warmup_learning_rate(args, epoch, batch_idx, len(train_loader_l), optimizer)               
                 optimizer.step()
 
                 losses.update(loss.item(), data_l_1.size(0))
@@ -65,12 +69,11 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                     logger.info('Train Task: {0} Epoch: [{1:3d}][{2:3d}/{3:3d}]\t'
                         'DTime {data_time.avg:.3f}\t'
                         'BTime {batch_time.avg:.3f}\t'
+                        'LR {lr:.3f}\t'
                         'Loss {loss.val:.4f} ({loss.avg:.4f})'.format(
                             task_idx+1, epoch, batch_idx, len(train_loader_l),
-                            batch_time=batch_time, data_time=data_time, loss=losses))
-
-                if epoch >= args.cosine_annealing_warmup:
-                    scheduler.step()
+                            batch_time=batch_time, data_time=data_time, 
+                            lr=optimizer.param_groups[0]['lr'], loss=losses))
 
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
             data, target = data.to(device), target.to(device)

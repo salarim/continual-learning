@@ -1,7 +1,23 @@
+import math
+import numpy as np
+
 import torch
 import torch.nn.functional as F
 
-import numpy as np
+
+def warmup_learning_rate(args, epoch, batch_id, total_batches, optimizer):
+    warmup_from = 0.01
+    eta_min = args.lr * (args.gamma ** 3)
+    warmup_to = eta_min + (args.lr - eta_min) * (
+            1 + math.cos(math.pi * args.warm_epochs / args.epochs)) / 2
+
+    if epoch <= args.warm_epochs:
+        p = (batch_id + (epoch - 1) * total_batches) / \
+            (args.warm_epochs * total_batches)
+        lr = warmup_from + p * (warmup_to - warmup_from)
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
 
 def seprated_softmax_loss(score_mean, target, tasks_targets, task_id):
