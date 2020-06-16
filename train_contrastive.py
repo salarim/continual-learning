@@ -36,8 +36,6 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
         for epoch in range(1,args.epochs+1):
             
             model.train()
-            scheduler.step()
-            
             losses = AverageMeter()
             batch_time = AverageMeter()
             data_time = AverageMeter()
@@ -74,6 +72,8 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                             task_idx+1, epoch, batch_idx, len(train_loader_l),
                             batch_time=batch_time, data_time=data_time, 
                             lr=optimizer.param_groups[0]['lr'], loss=losses))
+                            
+            scheduler.step()
 
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
             data, target = data.to(device), target.to(device)
