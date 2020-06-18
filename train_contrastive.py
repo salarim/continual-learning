@@ -29,7 +29,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
             param_group['lr'] = args.lr
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 
                                                                eta_min=args.lr * (args.gamma ** 3), 
-                                                               T_max=args.epochs)
+                                                               T_max=max(args.epochs,1))
         
         old_model = copy.deepcopy(model)
 
@@ -75,6 +75,8 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                             
             scheduler.step()
 
+        model.eval()
+        old_model.eval()
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
             data, target = data.to(device), target.to(device)
             prev_feats = None
