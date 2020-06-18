@@ -18,7 +18,7 @@ def get_model(args):
         raise ValueError('dataset is not supported.')
 
     if args.model_type == 'contrastive':
-        model = ProjectiveWrapper(model, output_dim=256) #TODO output_dim
+        model = ProjectiveWrapper(model, output_dim=args.proj_dim)
 
     if args.model_path:
         state_dict = torch.load(args.model_path)

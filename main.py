@@ -73,6 +73,8 @@ parser.add_argument('--sup-coef', type=float, default=0.5, metavar='LR',
                     help='Supervised coefficient in ContrastiveLoss. (default: 0.5)')
 parser.add_argument('--temp', type=float, default=0.5,
                     help='temperature for loss function')
+parser.add_argument('--proj-dim', type=int, default=256, metavar='N',
+                help='Dimension of mlp projection output (default: 256)')
 
 
 def main():
