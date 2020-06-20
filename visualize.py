@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from log_utils import makedirs
 from models.nearest_prototype import NearestPrototype
 from models.nearest_prototypes import NearestPrototypes
+from models.nearest_stream_prototype import NearestStreamPrototype
 
 try:
     from tsnecuda import TSNE
@@ -107,9 +108,16 @@ def extract_tsne_features(data_loader_creator, model, device, nearest_proto_mode
     protos = np.empty((0, X.shape[1]))
     protos_targets = np.empty((0), dtype=np.int)
     if nearest_proto_model is not None:
-        last_task = max(nearest_proto_model.task_class_prototypes.keys(), default=-1)
-        for target, feats in nearest_proto_model.task_class_prototypes[last_task].items():
-            if isinstance(nearest_proto_model, NearestPrototype):
+        if isinstance(nearest_proto_model, NearestPrototype) or \
+                isinstance(nearest_proto_model, NearestPrototypes):
+            last_task = max(nearest_proto_model.task_class_prototypes.keys(), default=-1)
+            class_prototypes = nearest_proto_model.task_class_prototypes[last_task]
+        elif isinstance(nearest_proto_model, NearestStreamPrototype):
+            class_prototypes = nearest_proto_model.class_prototypes
+
+        for target, feats in class_prototypes.items():
+            if isinstance(nearest_proto_model, NearestPrototype) or \
+                    isinstance(nearest_proto_model, NearestStreamPrototype):
                 feats = feats[0].unsqueeze(0).cpu().detach().numpy()
                 protos = np.append(protos, feats, axis=0)
                 protos_targets = np.append(protos_targets, target)

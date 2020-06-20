@@ -10,6 +10,7 @@ from termcolor import cprint
 from log_utils import AverageMeter
 from models.nearest_prototypes import NearestPrototypes
 from models.nearest_prototype import NearestPrototype
+from models.nearest_stream_prototype import NearestStreamPrototype
 from optim import ContrastiveLoss, warmup_learning_rate
 from test_contrastive import test_contrastive
 from test import accuracy
@@ -17,7 +18,7 @@ from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
-    nearest_proto_model = NearestPrototype(sigma=0.3)
+    nearest_proto_model = NearestStreamPrototype(sigma=0.3) #TODO
     criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, args.temp, args.sup_coef)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 
@@ -30,8 +31,6 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 
                                                                eta_min=args.lr * (args.gamma ** 3), 
                                                                T_max=max(args.epochs,1))
-        
-        old_model = copy.deepcopy(model)
 
         for epoch in range(1,args.epochs+1):
             
@@ -49,7 +48,7 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                 data_u_1, data_u_2 = data_u_1.to(device), data_u_2.to(device)
                 optimizer.zero_grad()
 
-                (_, output_l_1), (_, output_l_2) = model(data_l_1), model(data_l_2)
+                (hidden_l_1, output_l_1), (_, output_l_2) = model(data_l_1), model(data_l_2)
                 (_, output_u_1), (_, output_u_2) = model(data_u_1), model(data_u_2)
 
                 loss = criterion(output_l_1, output_l_2, output_u_1, output_u_2, target)
@@ -75,17 +74,10 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                             
             scheduler.step()
 
+            new_hidden_l_1, _ = model(data_l_1)
+            nearest_proto_model.add_features(hidden_l_1.detach(), new_hidden_l_1.detach(), target)
+
         model.eval()
-        old_model.eval()
-        for batch_idx, (data, _, target) in enumerate(train_loader_l):
-            data, target = data.to(device), target.to(device)
-            prev_feats = None
-            if task_idx > 0:
-                prev_feats, _ = old_model(data)
-                prev_feats = prev_feats.detach()
-            cur_feats, _ = model(data)
-            cur_feats = cur_feats.detach()
-            nearest_proto_model.add_features(task_idx, prev_feats, cur_feats, target)
 
         acc = AverageMeter()
         for batch_idx, (data, _, target) in enumerate(train_loader_l):
