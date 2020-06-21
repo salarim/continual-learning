@@ -71,11 +71,11 @@ def train_contrastive(args, model, device, train_loader_creator_l, train_loader_
                             task_idx+1, epoch, batch_idx, len(train_loader_l),
                             batch_time=batch_time, data_time=data_time, 
                             lr=optimizer.param_groups[0]['lr'], loss=losses))
+
+                new_hidden_l_1, _ = model(data_l_1)
+                nearest_proto_model.add_features(hidden_l_1.detach(), new_hidden_l_1.detach(), target)
                             
             scheduler.step()
-
-            new_hidden_l_1, _ = model(data_l_1)
-            nearest_proto_model.add_features(hidden_l_1.detach(), new_hidden_l_1.detach(), target)
 
         model.eval()
 
