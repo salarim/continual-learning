@@ -43,7 +43,7 @@ class NearestStreamPrototype:
         for target in absent_targets:
             target_prev_proto, target_prev_batch_num = self.class_prototypes[target]
 
-            weights = (((prev_feats - target_prev_proto)**2).sum(dim=1).sqrt() \
+            weights = (((prev_feats - target_prev_proto)**2).sum(dim=1) \
                 / (-2*self.sigma)).exp()
             drifts = cur_feats - prev_feats
             target_estimated_drift = (drifts * weights.unsqueeze(1)).sum(dim=0) / (weights.sum() + 1e-8)

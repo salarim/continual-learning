@@ -18,7 +18,7 @@ from visualize import plot_embedding_tsne
 
 def train_contrastive(args, model, device, train_loader_creator_l, train_loader_creator_u, 
                       test_loader_creator, logger):   
-    nearest_proto_model = NearestStreamPrototype(sigma=0.3) #TODO
+    nearest_proto_model = NearestStreamPrototype(sigma=args.sigma)
     criterion =  ContrastiveLoss(device, args.batch_size, args.batch_size, args.temp, args.sup_coef)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 
