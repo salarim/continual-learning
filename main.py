@@ -75,8 +75,8 @@ parser.add_argument('--temp', type=float, default=0.5,
                     help='temperature for loss function')
 parser.add_argument('--proj-dim', type=int, default=256, metavar='N',
                 help='Dimension of mlp projection output (default: 256)')
-parser.add_argument('--sigma', type=float, default=0.3,
-                    help='Sigma for the NearestPrototype model (default: 0.3)')
+parser.add_argument('--sigma', type=float, default=0.01,
+                    help='Sigma for the NearestPrototype model (default: 0.01)')
 
 
 def main():
